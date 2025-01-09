@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useToast } from "@/components/ui/use-toast";
 import axios from "axios";
+import { v4 as uuidv4 } from "uuid"; // Import uuid for generating unique IDs
+
 const BASE_URL = "http://localhost:3000";
 
 export const useVideoRecording = () => {
@@ -10,9 +12,13 @@ export const useVideoRecording = () => {
   const [error, setError] = useState<string | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  const fileIdRef = useRef<string | null>(null); // Ref to store the unique file ID
 
   const startRecording = useCallback(async () => {
     try {
+      // Generate a unique ID for the recording session
+      fileIdRef.current = uuidv4();
+
       // Capture camera and audio
       const cameraStream = await navigator.mediaDevices.getUserMedia({
         video: true,
@@ -88,7 +94,8 @@ export const useVideoRecording = () => {
 
   const uploadChunk = async (chunk: Blob) => {
     const formData = new FormData();
-    formData.append("file", chunk, `chunk_${Date.now()}.webm`);
+    formData.append("file", chunk, `chunk_${Date.now()}.webm`); // Keep the filename simple
+    formData.append("fileId", fileIdRef.current!); // Append the fileId as a separate field in formData
 
     try {
       const response = await axios.post(BASE_URL + "/upload", formData, {
