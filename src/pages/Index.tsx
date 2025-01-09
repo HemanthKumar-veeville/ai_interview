@@ -1,3 +1,4 @@
+// pages/index.tsx
 import { useEffect, useState } from "react";
 import { VideoRecorder } from "@/components/VideoRecorder";
 import { Chat } from "@/components/Chat";
@@ -15,8 +16,8 @@ import { useVideoRecording } from "@/hooks/useVideoRecording";
 import { Video, X } from "lucide-react";
 
 const Index = () => {
-  const [hasConsent, setHasConsent] = useState(false);
-  const [showConsent, setShowConsent] = useState(true);
+  const [hasConsent, setHasConsent] = useState<boolean>(false);
+  const [showConsent, setShowConsent] = useState<boolean>(true);
   const { startRecording, stopRecording, isRecording, stream } =
     useVideoRecording();
 
@@ -40,7 +41,7 @@ const Index = () => {
 
   // Cleanup on window/tab close
   useEffect(() => {
-    const handleBeforeUnload = (event) => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
       handleExit(); // Clean up resources
       // Optional: Prompt the user to confirm leaving the page
       event.preventDefault();

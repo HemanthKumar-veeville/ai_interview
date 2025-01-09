@@ -1,96 +1,130 @@
-import { useState, useEffect, useCallback } from "react";
-import { VideoRecordingState } from "@/types";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useToast } from "@/components/ui/use-toast";
+import axios from "axios";
+const BASE_URL = "http://localhost:3000";
 
 export const useVideoRecording = () => {
   const { toast } = useToast();
-  const [state, setState] = useState<VideoRecordingState>({
-    isRecording: false,
-    stream: null,
-    error: null,
-    mediaRecorder: null,
-  });
+  const [isRecording, setIsRecording] = useState<boolean>(false);
+  const [stream, setStream] = useState<MediaStream | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
 
   const startRecording = useCallback(async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      const mediaRecorder = new MediaRecorder(stream);
-      const chunks: Blob[] = [];
+      // Capture camera and audio
+      const cameraStream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: true,
+      });
 
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
-          chunks.push(e.data);
+      // Capture screen
+      const screenStream = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: true,
+      });
+
+      // Combine camera and screen streams
+      const combinedStream = new MediaStream([
+        ...cameraStream.getVideoTracks(),
+        ...screenStream.getVideoTracks(),
+        ...cameraStream.getAudioTracks(),
+      ]);
+
+      setStream(combinedStream);
+
+      // Initialize MediaRecorder with the combined stream
+      mediaRecorderRef.current = new MediaRecorder(combinedStream, {
+        mimeType: "video/webm; codecs=vp9,opus",
+      });
+
+      // Handle data available event
+      mediaRecorderRef.current.ondataavailable = async (event: BlobEvent) => {
+        if (event.data.size > 0) {
+          chunksRef.current.push(event.data);
+          await uploadChunk(event.data); // Upload the chunk immediately
         }
       };
 
-      mediaRecorder.onstop = () => {
-        const blob = new Blob(chunks, { type: "video/webm" });
+      // Handle recording stop event
+      mediaRecorderRef.current.onstop = () => {
+        const blob = new Blob(chunksRef.current, { type: "video/webm" });
         console.log("Recording stopped, blob created:", blob);
       };
 
-      mediaRecorder.start();
-
-      setState({
-        isRecording: true,
-        stream,
-        error: null,
-        mediaRecorder,
-      });
+      // Start recording
+      mediaRecorderRef.current.start(10000); // Create a chunk every 10 seconds
+      setIsRecording(true);
 
       toast({
         title: "Recording Started",
         description: "Your interview is now being recorded.",
       });
-    } catch (error) {
-      setState((prev) => ({
-        ...prev,
-        error: "Failed to start recording",
-      }));
+    } catch (err) {
+      setError("Failed to start recording. Please check your camera, microphone, and screen sharing permissions.");
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Failed to start recording. Please check your camera permissions.",
+        description: "Failed to start recording. Please check your permissions.",
       });
+      console.error(err);
     }
   }, [toast]);
 
   const stopRecording = useCallback(() => {
-    if (state.mediaRecorder && state.stream) {
-      state.mediaRecorder.stop();
-      state.stream.getTracks().forEach((track) => track.stop());
-      setState({
-        isRecording: false,
-        stream: null,
-        error: null,
-        mediaRecorder: null,
-      });
+    if (mediaRecorderRef.current && stream) {
+      mediaRecorderRef.current.stop();
+      stream.getTracks().forEach((track) => track.stop());
+      setIsRecording(false);
+      setStream(null);
+
       toast({
         title: "Recording Stopped",
         description: "Your interview recording has been saved.",
       });
     }
-  }, [state.mediaRecorder, state.stream, toast]);
+  }, [stream, toast]);
+
+  const uploadChunk = async (chunk: Blob) => {
+    const formData = new FormData();
+    formData.append("file", chunk, `chunk_${Date.now()}.webm`);
+
+    try {
+      const response = await axios.post(BASE_URL + "/upload", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data", // Ensure the correct content type for file uploads
+        },
+        withCredentials: true, // Include credentials (cookies, auth headers) if needed
+      });
+      console.log("Chunk uploaded:", response.data);
+    } catch (error) {
+      console.error("Chunk upload failed:", error);
+      // Retry logic can be added here
+    }
+  };
 
   useEffect(() => {
-    // Handle browser close/refresh
     const handleBeforeUnload = () => {
-      if (state.isRecording) {
+      if (isRecording) {
         stopRecording();
       }
     };
 
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
     return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-      if (state.stream) {
-        state.stream.getTracks().forEach((track) => track.stop());
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      if (stream) {
+        stream.getTracks().forEach((track) => track.stop());
       }
     };
-  }, [state.isRecording, state.stream, stopRecording]);
+  }, [isRecording, stream, stopRecording]);
 
   return {
-    ...state,
+    isRecording,
+    stream,
+    error,
     startRecording,
     stopRecording,
   };
