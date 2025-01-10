@@ -1,9 +1,11 @@
+
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useToast } from "@/components/ui/use-toast";
 import axios from "axios";
 import { v4 as uuidv4 } from "uuid";
 
 const BASE_URL = "http://localhost:3000";
+const CHUNK_DURATION = 10000; // 10 seconds in milliseconds
 
 export const useVideoRecording = () => {
   const { toast } = useToast();
@@ -13,11 +15,12 @@ export const useVideoRecording = () => {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const fileIdRef = useRef<string | null>(null);
-  const previousChunkBlob = useRef<Blob | null>(null);
+  const chunkCountRef = useRef<number>(0);
 
   const startRecording = useCallback(async () => {
     try {
       fileIdRef.current = uuidv4();
+      chunkCountRef.current = 0;
 
       // Capture camera and audio
       const cameraStream = await navigator.mediaDevices.getUserMedia({
@@ -37,7 +40,7 @@ export const useVideoRecording = () => {
       // Create a new MediaStream for combined tracks
       const combinedStream = new MediaStream();
 
-      // Add screen video track with constraints
+      // Add screen video track
       const screenVideoTrack = screenStream.getVideoTracks()[0];
       combinedStream.addTrack(screenVideoTrack);
 
@@ -45,7 +48,7 @@ export const useVideoRecording = () => {
       const cameraVideoTrack = cameraStream.getVideoTracks()[0];
       combinedStream.addTrack(cameraVideoTrack);
 
-      // Combine audio tracks using AudioContext
+      // Combine audio tracks
       const audioContext = new AudioContext();
       const destination = audioContext.createMediaStreamDestination();
 
@@ -65,85 +68,29 @@ export const useVideoRecording = () => {
         combinedStream.addTrack(track);
       });
 
-      setStream(combinedStream);
+      setStream(cameraStream);
 
-      // Initialize MediaRecorder with specific options for better chunk handling
+      // Initialize MediaRecorder
       mediaRecorderRef.current = new MediaRecorder(combinedStream, {
         mimeType: "video/webm;codecs=vp8,opus",
-        videoBitsPerSecond: 3000000,
+        timeslice: CHUNK_DURATION, // Use timeslice for consistent chunking
       });
 
-      // Clear previous chunks
       chunksRef.current = [];
-      previousChunkBlob.current = null;
 
-      // Handle data available event with improved chunk processing
-      mediaRecorderRef.current.ondataavailable = async (event: BlobEvent) => {
+      mediaRecorderRef.current.ondataavailable = (event: BlobEvent) => {
         if (event.data.size > 0) {
-          try {
-            // Create a self-contained chunk by including metadata
-            const reader = new FileReader();
-            reader.onload = async () => {
-              const arrayBuffer = reader.result as ArrayBuffer;
-              
-              // Ensure chunk starts with a keyframe
-              const chunk = new Blob([
-                previousChunkBlob.current ? previousChunkBlob.current : new Blob(),
-                new Blob([arrayBuffer])
-              ], { type: "video/webm" });
-
-              // Store current chunk for next iteration
-              previousChunkBlob.current = chunk;
-              
-              // Store chunk locally
-              chunksRef.current.push(chunk);
-              
-              // Upload chunk
-              await uploadChunk(chunk);
-            };
-            
-            reader.readAsArrayBuffer(event.data);
-          } catch (err) {
-            console.error("Error processing chunk:", err);
-          }
+          chunksRef.current.push(event.data);
+          uploadChunk(event.data, chunkCountRef.current);
+          chunkCountRef.current++;
         }
       };
 
-      // Handle recording stop with improved final processing
-      mediaRecorderRef.current.onstop = async () => {
-        try {
-          // Create final blob from all chunks
-          const finalBlob = new Blob(chunksRef.current, { 
-            type: "video/webm"
-          });
-          
-          // Upload final complete video
-          const formData = new FormData();
-          formData.append("file", finalBlob, `complete_${fileIdRef.current}.webm`);
-          formData.append("fileId", fileIdRef.current!);
-          formData.append("isFinal", "true");
-
-          await axios.post(`${BASE_URL}/upload`, formData, {
-            headers: { "Content-Type": "multipart/form-data" },
-            withCredentials: true,
-          });
-
-          // Clear chunks and previous blob
-          chunksRef.current = [];
-          previousChunkBlob.current = null;
-        } catch (err) {
-          console.error("Failed to upload complete video:", err);
-          toast({
-            variant: "destructive",
-            title: "Upload Error",
-            description: "Failed to upload the complete video.",
-          });
-        }
+      mediaRecorderRef.current.onstop = () => {
+        // Handle stopping if needed
       };
 
-      // Start recording with configured chunk interval
-      // Using 5 seconds instead of 10 for better chunk management
-      mediaRecorderRef.current.start(5000);
+      mediaRecorderRef.current.start();
       setIsRecording(true);
 
       toast({
@@ -164,13 +111,12 @@ export const useVideoRecording = () => {
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && stream) {
       mediaRecorderRef.current.stop();
-      
+
       // Stop all tracks in the stream
       stream.getTracks().forEach((track) => track.stop());
-      
+
       setIsRecording(false);
       setStream(null);
-      previousChunkBlob.current = null;
 
       toast({
         title: "Recording Stopped",
@@ -179,38 +125,38 @@ export const useVideoRecording = () => {
     }
   }, [stream, toast]);
 
-  const uploadChunk = async (chunk: Blob) => {
+  const uploadChunk = async (chunk: Blob, chunkNumber: number) => {
     const formData = new FormData();
-    const timestamp = Date.now();
-    formData.append("file", chunk, `chunk_${timestamp}.webm`);
+    formData.append("file", chunk, `chunk_${fileIdRef.current}_${chunkNumber}.webm`);
     formData.append("fileId", fileIdRef.current!);
-    formData.append("timestamp", timestamp.toString());
+    formData.append("chunkNumber", chunkNumber.toString());
+    formData.append("timestamp", Date.now().toString());
 
     try {
       const response = await axios.post(`${BASE_URL}/upload`, formData, {
         headers: { "Content-Type": "multipart/form-data" },
         withCredentials: true,
       });
-      console.log("Chunk uploaded successfully:", response.data);
+      console.log(`Chunk ${chunkNumber} uploaded successfully:`, response.data);
     } catch (error) {
-      console.error("Chunk upload failed:", error);
-      await retryUpload(chunk);
+      console.error(`Chunk ${chunkNumber} upload failed:`, error);
+      await retryUpload(chunk, chunkNumber);
     }
   };
 
-  const retryUpload = async (chunk: Blob, retries = 3, delay = 1000) => {
+  const retryUpload = async (chunk: Blob, chunkNumber: number, retries = 3, delay = 1000) => {
     for (let i = 0; i < retries; i++) {
       try {
         await new Promise(resolve => setTimeout(resolve, delay * i));
-        await uploadChunk(chunk);
+        await uploadChunk(chunk, chunkNumber);
         return;
       } catch (err) {
-        console.error(`Retry ${i + 1} failed:`, err);
+        console.error(`Retry ${i + 1} failed for chunk ${chunkNumber}:`, err);
         if (i === retries - 1) {
           toast({
             variant: "destructive",
             title: "Upload Error",
-            description: "Failed to upload recording chunk. Please check your connection.",
+            description: `Failed to upload chunk ${chunkNumber}. Please check your connection.`,
           });
         }
       }
