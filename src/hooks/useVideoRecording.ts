@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useToast } from "@/components/ui/use-toast";
 import axios from "axios";
@@ -73,24 +72,20 @@ export const useVideoRecording = () => {
       // Initialize MediaRecorder
       mediaRecorderRef.current = new MediaRecorder(combinedStream, {
         mimeType: "video/webm;codecs=vp8,opus",
-        timeslice: CHUNK_DURATION, // Use timeslice for consistent chunking
       });
 
       chunksRef.current = [];
 
-      mediaRecorderRef.current.ondataavailable = (event: BlobEvent) => {
+      mediaRecorderRef.current.ondataavailable = async (event: BlobEvent) => {
         if (event.data.size > 0) {
           chunksRef.current.push(event.data);
-          uploadChunk(event.data, chunkCountRef.current);
+          // Immediately upload the chunk
+          await uploadChunk(event.data, chunkCountRef.current);
           chunkCountRef.current++;
         }
       };
 
-      mediaRecorderRef.current.onstop = () => {
-        // Handle stopping if needed
-      };
-
-      mediaRecorderRef.current.start();
+      mediaRecorderRef.current.start(CHUNK_DURATION); // Start recording with 10-second chunks
       setIsRecording(true);
 
       toast({
