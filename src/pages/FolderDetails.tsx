@@ -4,7 +4,8 @@ import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { fetchMergedVideo, clearMergedVideo } from "@/store/slices/fileSlice";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const FolderDetails = () => {
   const { folderId } = useParams();
@@ -25,45 +26,60 @@ const FolderDetails = () => {
   }, [dispatch, folderId]);
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-8">
-      <div className="max-w-7xl mx-auto">
-        <div className="mb-8">
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 p-8">
+      <div className="max-w-7xl mx-auto space-y-8">
+        <div className="flex flex-col gap-2">
           <Button
             variant="ghost"
-            className="mb-4"
+            size="sm"
             onClick={() => navigate("/admin/dashboard")}
+            className="w-fit"
           >
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Dashboard
           </Button>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-            Folder Details
+          <h1 className="text-4xl font-bold text-gray-900 dark:text-white">
+            Interview Recording
           </h1>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mt-2 font-mono">
-            {folderId}
+          <p className="text-sm text-gray-600 dark:text-gray-400 font-mono">
+            Folder ID: {folderId}
           </p>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-          {mergeLoading && (
-            <div className="text-center py-8">Loading video...</div>
-          )}
-          {mergeError && (
-            <div className="text-red-500 text-center py-8">{mergeError}</div>
-          )}
-          {mergedVideoKey && !mergeLoading && !mergeError && (
-            <div className="space-y-4">
-              <h2 className="text-xl font-semibold">Interview Recording</h2>
-              <video
-                controls
-                className="w-full rounded-lg"
-                src={mergedVideoKey}
-              >
-                Your browser does not support the video tag.
-              </video>
-            </div>
-          )}
-        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Video Playback</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {mergeLoading && (
+              <div className="flex flex-col items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
+                <p className="text-sm text-muted-foreground">
+                  Loading interview recording...
+                </p>
+              </div>
+            )}
+
+            {mergeError && (
+              <div className="bg-destructive/10 text-destructive rounded-lg p-4 text-center">
+                <p className="font-medium">Error loading video</p>
+                <p className="text-sm mt-1">{mergeError}</p>
+              </div>
+            )}
+
+            {mergedVideoKey && !mergeLoading && !mergeError && (
+              <div className="space-y-4">
+                <video
+                  controls
+                  className="w-full aspect-video rounded-lg border bg-black"
+                  src={mergedVideoKey}
+                >
+                  Your browser does not support the video tag.
+                </video>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
