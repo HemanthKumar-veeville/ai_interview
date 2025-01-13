@@ -1,5 +1,6 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from 'axios';
+const BASE_URL = import.meta.env.VITE_BASE_URL;
 
 interface FileState {
   folders: string[];
@@ -24,7 +25,7 @@ export const fetchFolders = createAsyncThunk(
   'file/fetchFolders',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await axios.get('http://localhost:3000/files/folders', {
+      const response = await axios.get(`${BASE_URL}/files/folders`, {
         withCredentials: true,
       });
       return response.data;
@@ -41,7 +42,7 @@ export const fetchMergedVideo = createAsyncThunk(
   'file/fetchMergedVideo',
   async (folderId: string, { rejectWithValue }) => {
     try {
-      const response = await axios.get(`http://localhost:3000/merge/${folderId}`, {
+      const response = await axios.get(`${BASE_URL}/merge/${folderId}`, {
         withCredentials: true,
       });
       return response.data;

@@ -2,8 +2,8 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useToast } from "@/components/ui/use-toast";
 import axios from "axios";
 import { v4 as uuidv4 } from "uuid";
+const BASE_URL = import.meta.env.VITE_BASE_URL;
 
-const BASE_URL = "http://localhost:3000";
 const CHUNK_DURATION = 10000; // 10 seconds in milliseconds
 
 export const useVideoRecording = () => {
