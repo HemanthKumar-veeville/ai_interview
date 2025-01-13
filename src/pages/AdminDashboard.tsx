@@ -7,6 +7,11 @@ import { fetchFolders } from "@/store/slices/fileSlice";
 import { LogOut, Folder, Loader2, FileAudio, ChevronRight } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 
+interface Folder {
+  name: string;
+  createdDate: string;
+}
+
 const AdminDashboard = () => {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
@@ -24,6 +29,14 @@ const AdminDashboard = () => {
 
   const handleFolderClick = (folderId: string) => {
     navigate(`/admin/folders/${folderId}`);
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
   };
 
   return (
@@ -88,10 +101,10 @@ const AdminDashboard = () => {
 
             {!loading && !error && (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {folders.map((folderId) => (
+                {(folders as Folder[]).map((folder) => (
                   <button
-                    key={folderId}
-                    onClick={() => handleFolderClick(folderId)}
+                    key={folder.name}
+                    onClick={() => handleFolderClick(folder.name)}
                     className="group relative flex items-center space-x-4 rounded-xl border border-gray-200 dark:border-gray-700 p-5 transition-all 
                     hover:bg-indigo-50 dark:hover:bg-indigo-900/20 
                     hover:border-indigo-200 dark:hover:border-indigo-800 
@@ -121,7 +134,13 @@ const AdminDashboard = () => {
                         className="text-sm text-gray-500 dark:text-gray-400 font-mono mt-2 truncate
                         group-hover:text-indigo-600/70 dark:group-hover:text-indigo-400/70"
                       >
-                        {folderId.slice(0, 10)}
+                        {folder.name.slice(0, 10)}...
+                      </p>
+                      <p
+                        className="text-xs text-gray-400 dark:text-gray-500 mt-1
+                        group-hover:text-indigo-500/70 dark:group-hover:text-indigo-400/70"
+                      >
+                        {formatDate(folder.createdDate)}
                       </p>
                     </div>
                     <ChevronRight

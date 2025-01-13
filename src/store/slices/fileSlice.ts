@@ -2,8 +2,13 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from 'axios';
 const BASE_URL = import.meta.env.VITE_BASE_URL;
 
+interface Folder {
+  name: string;
+  createdDate: string;
+}
+
 interface FileState {
-  folders: string[];
+  folders: Folder[];
   loading: boolean;
   error: string | null;
   mergedVideoKey: string | null;
