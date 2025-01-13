@@ -1,8 +1,5 @@
 // pages/index.tsx
-import { useEffect, useState } from "react";
-import { VideoRecorder } from "@/components/VideoRecorder";
-import { Chat } from "@/components/Chat";
-import { Button } from "@/components/ui/button";
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -11,9 +8,12 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { VideoRecorder } from "@/components/VideoRecorder";
 import { motion } from "framer-motion";
+import { Video } from "lucide-react";
+import { Chat } from "@/components/Chat";
 import { useVideoRecording } from "@/hooks/useVideoRecording";
-import { Video, X } from "lucide-react";
 
 const Index = () => {
   const [hasConsent, setHasConsent] = useState<boolean>(false);
@@ -27,36 +27,29 @@ const Index = () => {
     startRecording();
   };
 
-  // Clean exit function
-  const handleExit = () => {
-    if (isRecording) {
-      stopRecording();
-    }
-    if (stream) {
-      stream.getTracks().forEach((track) => track.stop());
-    }
-    setHasConsent(false);
-    setShowConsent(true);
-  };
-
-  // Cleanup on window/tab close
   useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      handleExit(); // Clean up resources
-      // Optional: Prompt the user to confirm leaving the page
-      event.preventDefault();
-      event.returnValue = ""; // Required for Chrome
+      if (isRecording) {
+        event.preventDefault();
+        event.returnValue =
+          "Recording in progress. Are you sure you want to leave?";
+      }
     };
 
     window.addEventListener("beforeunload", handleBeforeUnload);
-
     return () => {
       window.removeEventListener("beforeunload", handleBeforeUnload);
+      if (isRecording) {
+        stopRecording();
+      }
+      if (stream) {
+        stream.getTracks().forEach((track) => track.stop());
+      }
     };
-  }, [isRecording, stream]); // Re-run effect if recording or stream changes
+  }, [isRecording, stream, stopRecording]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
       <Dialog open={showConsent} onOpenChange={setShowConsent}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
@@ -65,11 +58,8 @@ const Index = () => {
             </DialogTitle>
             <DialogDescription className="mt-4 text-gray-600 dark:text-gray-300 leading-relaxed">
               This application will record video and audio during your interview
-              session. The recording will start automatically after you give
-              consent and will stop when you close the browser. The recording
-              will be used only for interview purposes and stored securely. By
-              clicking "I Agree", you consent to being recorded during this
-              session.
+              session. By clicking "I Agree", you consent to being recorded
+              during this session.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="mt-6">
@@ -82,12 +72,10 @@ const Index = () => {
 
       {hasConsent && (
         <div className="h-screen">
-          {/* Hidden video recorder for background recording */}
           <div className="hidden">
             <VideoRecorder />
           </div>
 
-          {/* Recording indicator with circular video preview */}
           {isRecording && (
             <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
@@ -108,16 +96,15 @@ const Index = () => {
                   }}
                 />
                 <div className="absolute top-0 right-0 w-3 h-3">
-                  <div className="w-full h-full bg-red-500 rounded-full animate-recording-pulse" />
+                  <div className="w-full h-full bg-red-500 rounded-full animate-pulse" />
                 </div>
               </div>
               <Video className="w-4 h-4" />
             </motion.div>
           )}
 
-          {/* Full screen chat */}
           <div className="h-full p-4">
-            <div className="h-full flex flex-col">
+            <div className="h-full flex flex-col max-w-7xl mx-auto">
               <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
                 AI Interviewer
               </h2>

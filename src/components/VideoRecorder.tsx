@@ -25,7 +25,7 @@ export const VideoRecorder = () => {
           className="w-full h-full object-cover bg-gray-900"
         />
         {isRecording && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             className="absolute top-4 right-4 flex items-center gap-2 bg-red-500/90 backdrop-blur-sm text-white px-4 py-2 rounded-full shadow-lg"
@@ -35,7 +35,7 @@ export const VideoRecorder = () => {
           </motion.div>
         )}
         {isRecording && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             className="absolute bottom-4 left-4 flex items-center gap-2 bg-black/50 backdrop-blur-sm text-white px-4 py-2 rounded-full"
