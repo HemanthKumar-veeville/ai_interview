@@ -12,7 +12,7 @@ const AdminDashboard = () => {
   const dispatch = useAppDispatch();
   const { user } = useAppSelector((state) => state.auth);
   const { folders, loading, error } = useAppSelector((state) => state.file);
-
+  console.log(folders);
   useEffect(() => {
     dispatch(fetchFolders());
   }, [dispatch]);
