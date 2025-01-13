@@ -121,7 +121,7 @@ const AdminDashboard = () => {
                         className="text-sm text-gray-500 dark:text-gray-400 font-mono mt-2 truncate
                         group-hover:text-indigo-600/70 dark:group-hover:text-indigo-400/70"
                       >
-                        {folderId}
+                        {folderId.slice(0, 10)}
                       </p>
                     </div>
                     <ChevronRight
