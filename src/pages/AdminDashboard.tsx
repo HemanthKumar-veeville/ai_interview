@@ -31,11 +31,13 @@ const AdminDashboard = () => {
     navigate(`/admin/folders/${folderId}`);
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("en-US", {
+  const formatDateTime = (dateString: string) => {
+    return new Date(dateString).toLocaleString("en-US", {
       year: "numeric",
       month: "short",
       day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
     });
   };
 
@@ -140,7 +142,7 @@ const AdminDashboard = () => {
                         className="text-xs text-gray-400 dark:text-gray-500 mt-1
                         group-hover:text-indigo-500/70 dark:group-hover:text-indigo-400/70"
                       >
-                        {formatDate(folder.createdDate)}
+                        {formatDateTime(folder.createdDate)}
                       </p>
                     </div>
                     <ChevronRight
