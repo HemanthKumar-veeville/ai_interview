@@ -91,7 +91,7 @@ export const Chat = () => {
 
   // Load API key from localStorage or prompt the user
   useEffect(() => {
-    const storedApiKey = localStorage.getItem("openai_api_key");
+    const storedApiKey = OPEN_AI_KEY;
     if (storedApiKey) {
       setApiKey(storedApiKey);
     } else {
