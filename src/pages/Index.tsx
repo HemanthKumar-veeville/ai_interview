@@ -27,6 +27,7 @@ const Index = () => {
     stream,
     screenStream,
     cameraStream,
+    interviewerStream,
   } = useVideoRecording();
 
   const handleConsent = () => {
@@ -99,6 +100,7 @@ const Index = () => {
               stream={stream}
               screenStream={screenStream}
               cameraStream={cameraStream}
+              interviewerStream={interviewerStream}
             />
           </div>
           <div className="flex flex-col">

@@ -3,30 +3,61 @@ import { useToast } from "@/components/ui/use-toast";
 import axios from "axios";
 import { v4 as uuidv4 } from "uuid";
 const BASE_URL = import.meta.env.VITE_BASE_URL;
-
+import riya from "../assets/videos/riya.mp4";
 const CHUNK_DURATION = 10000; // 10 seconds in milliseconds
+const DEFAULT_INTERVIEWER_VIDEO_URL = riya;
 
 export const useVideoRecording = () => {
   const { toast } = useToast();
   const [isRecording, setIsRecording] = useState<boolean>(false);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
+  const [interviewerStream, setInterviewerStream] = useState<MediaStream | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const fileIdRef = useRef<string | null>(null);
   const chunkCountRef = useRef<number>(0);
-  const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
-  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+
+  const initializeInterviewer = useCallback(async () => {
+    try {
+      // First try to load AI-driven video feed if available
+      const videoElement = document.createElement('video');
+      videoElement.src = DEFAULT_INTERVIEWER_VIDEO_URL;
+      videoElement.loop = true;
+      videoElement.muted = true;
+      videoElement.playsInline = true;
+      videoElement.autoplay = true;
+      
+      // Wait for the video to be loaded
+      await new Promise((resolve, reject) => {
+        videoElement.onloadedmetadata = () => {
+          videoElement.play()
+            .then(resolve)
+            .catch(reject);
+        };
+        videoElement.onerror = () => reject(new Error('Failed to load interviewer video'));
+      });
+      
+      const stream = videoElement.captureStream();
+      setInterviewerStream(stream);
+    } catch (err) {
+      console.error('Failed to initialize interviewer video:', err);
+      setError('Failed to initialize interviewer video');
+    }
+  }, []);
 
   const startRecording = useCallback(async (cameraStream: MediaStream) => {
     try {
       fileIdRef.current = uuidv4();
       chunkCountRef.current = 0;
 
-      // Store the camera stream
+      // Initialize camera and interviewer streams
       setCameraStream(cameraStream);
+      await initializeInterviewer();
 
-      // Request screen sharing
+      // Request screen sharing (hidden from user, used for recording both feeds)
       const displayStream = await navigator.mediaDevices.getDisplayMedia({
         video: true,
         audio: true,
@@ -36,7 +67,7 @@ export const useVideoRecording = () => {
       const audioContext = new AudioContext();
       const destination = audioContext.createMediaStreamDestination();
 
-      // Add system audio from screen sharing
+      // Add system audio (AI speech)
       if (displayStream.getAudioTracks().length > 0) {
         const systemSource = audioContext.createMediaStreamSource(displayStream);
         systemSource.connect(destination);
@@ -48,7 +79,7 @@ export const useVideoRecording = () => {
         micSource.connect(destination);
       }
 
-      // Combine all tracks: screen video and mixed audio
+      // Combine all tracks
       const tracks = [
         ...displayStream.getVideoTracks(),
         ...destination.stream.getAudioTracks(),
@@ -81,16 +112,16 @@ export const useVideoRecording = () => {
         description: "Your interview is now being recorded.",
       });
     } catch (err) {
-      setError("Failed to start recording or screen sharing. Please check your permissions.");
+      setError("Failed to start recording. Please check your permissions.");
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Failed to start recording or screen sharing. Please check your permissions.",
+        description: "Failed to start recording. Please check your permissions.",
       });
       console.error(err);
       throw err;
     }
-  }, [toast]);
+  }, [toast, initializeInterviewer]);
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && (stream || screenStream)) {
@@ -171,11 +202,20 @@ export const useVideoRecording = () => {
     };
   }, [isRecording, stream, screenStream, stopRecording]);
 
+  useEffect(() => {
+    return () => {
+      if (interviewerStream) {
+        interviewerStream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [interviewerStream]);
+
   return {
     isRecording,
     stream,
     screenStream,
     cameraStream,
+    interviewerStream,
     error,
     startRecording,
     stopRecording,

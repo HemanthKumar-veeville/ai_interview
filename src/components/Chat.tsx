@@ -228,10 +228,10 @@ export const Chat = () => {
 
   // Initialize the conversation with a greeting from the AI
   const initiateConversation = () => {
-    const initialMessage: Message = {
+    const initialMessage = {
       id: "1",
       content:
-        "Hello! I'm your AI interviewer. Could you please introduce yourself and tell me about your professional background?",
+        "Hi, I'm Riya! I'll be conducting your interview today. Could you please introduce yourself and tell me about your professional background?",
       role: "assistant",
       timestamp: Date.now(),
     };
