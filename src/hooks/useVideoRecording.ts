@@ -15,61 +15,50 @@ export const useVideoRecording = () => {
   const chunksRef = useRef<Blob[]>([]);
   const fileIdRef = useRef<string | null>(null);
   const chunkCountRef = useRef<number>(0);
+  const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
 
-  const startRecording = useCallback(async () => {
+  const startRecording = useCallback(async (cameraStream: MediaStream) => {
     try {
       fileIdRef.current = uuidv4();
       chunkCountRef.current = 0;
 
-      // Capture camera and audio
-      const cameraStream = await navigator.mediaDevices.getUserMedia({
+      // Store the camera stream
+      setCameraStream(cameraStream);
+
+      // Request screen sharing
+      const displayStream = await navigator.mediaDevices.getDisplayMedia({
         video: true,
         audio: true,
       });
 
-      // Capture screen with audio
-      const screenStream = await navigator.mediaDevices.getDisplayMedia({
-        video: {
-          displaySurface: "monitor",
-          frameRate: 30,
-        },
-        audio: true,
-      });
-
-      // Create a new MediaStream for combined tracks
-      const combinedStream = new MediaStream();
-
-      // Add screen video track
-      const screenVideoTrack = screenStream.getVideoTracks()[0];
-      combinedStream.addTrack(screenVideoTrack);
-
-      // Add camera video track
-      const cameraVideoTrack = cameraStream.getVideoTracks()[0];
-      combinedStream.addTrack(cameraVideoTrack);
-
-      // Combine audio tracks
+      // Create an audio context to mix audio streams
       const audioContext = new AudioContext();
       const destination = audioContext.createMediaStreamDestination();
 
-      // Add microphone audio
-      const microphoneSource = audioContext.createMediaStreamSource(cameraStream);
-      microphoneSource.connect(destination);
-
-      // Add system audio if available
-      const systemAudioTracks = screenStream.getAudioTracks();
-      if (systemAudioTracks.length > 0) {
-        const systemSource = audioContext.createMediaStreamSource(screenStream);
+      // Add system audio from screen sharing
+      if (displayStream.getAudioTracks().length > 0) {
+        const systemSource = audioContext.createMediaStreamSource(displayStream);
         systemSource.connect(destination);
       }
 
-      // Add the combined audio track to the stream
-      destination.stream.getAudioTracks().forEach(track => {
-        combinedStream.addTrack(track);
-      });
+      // Add microphone audio
+      if (cameraStream.getAudioTracks().length > 0) {
+        const micSource = audioContext.createMediaStreamSource(cameraStream);
+        micSource.connect(destination);
+      }
 
-      setStream(cameraStream);
+      // Combine all tracks: screen video and mixed audio
+      const tracks = [
+        ...displayStream.getVideoTracks(),
+        ...destination.stream.getAudioTracks(),
+      ];
+      const combinedStream = new MediaStream(tracks);
 
-      // Initialize MediaRecorder
+      setStream(combinedStream);
+      setScreenStream(displayStream);
+
+      // Initialize MediaRecorder with combined stream
       mediaRecorderRef.current = new MediaRecorder(combinedStream, {
         mimeType: "video/webm;codecs=vp8,opus",
       });
@@ -79,13 +68,12 @@ export const useVideoRecording = () => {
       mediaRecorderRef.current.ondataavailable = async (event: BlobEvent) => {
         if (event.data.size > 0) {
           chunksRef.current.push(event.data);
-          // Immediately upload the chunk
           await uploadChunk(event.data, chunkCountRef.current);
           chunkCountRef.current++;
         }
       };
 
-      mediaRecorderRef.current.start(CHUNK_DURATION); // Start recording with 10-second chunks
+      mediaRecorderRef.current.start(CHUNK_DURATION);
       setIsRecording(true);
 
       toast({
@@ -93,32 +81,35 @@ export const useVideoRecording = () => {
         description: "Your interview is now being recorded.",
       });
     } catch (err) {
-      setError("Failed to start recording. Please check your permissions.");
+      setError("Failed to start recording or screen sharing. Please check your permissions.");
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Failed to start recording. Please check your permissions.",
+        description: "Failed to start recording or screen sharing. Please check your permissions.",
       });
       console.error(err);
+      throw err;
     }
   }, [toast]);
 
   const stopRecording = useCallback(() => {
-    if (mediaRecorderRef.current && stream) {
+    if (mediaRecorderRef.current && (stream || screenStream)) {
       mediaRecorderRef.current.stop();
 
-      // Stop all tracks in the stream
-      stream.getTracks().forEach((track) => track.stop());
+      // Stop all tracks in both streams
+      stream?.getTracks().forEach((track) => track.stop());
+      screenStream?.getTracks().forEach((track) => track.stop());
 
       setIsRecording(false);
       setStream(null);
+      setScreenStream(null);
 
       toast({
         title: "Recording Stopped",
         description: "Your interview recording has been saved.",
       });
     }
-  }, [stream, toast]);
+  }, [stream, screenStream, toast]);
 
   const uploadChunk = async (chunk: Blob, chunkNumber: number) => {
     const formData = new FormData();
@@ -174,12 +165,17 @@ export const useVideoRecording = () => {
       if (stream) {
         stream.getTracks().forEach((track) => track.stop());
       }
+      if (screenStream) {
+        screenStream.getTracks().forEach((track) => track.stop());
+      }
     };
-  }, [isRecording, stream, stopRecording]);
+  }, [isRecording, stream, screenStream, stopRecording]);
 
   return {
     isRecording,
     stream,
+    screenStream,
+    cameraStream,
     error,
     startRecording,
     stopRecording,

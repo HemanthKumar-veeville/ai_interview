@@ -14,17 +14,32 @@ import { motion } from "framer-motion";
 import { Video } from "lucide-react";
 import { Chat } from "@/components/Chat";
 import { useVideoRecording } from "@/hooks/useVideoRecording";
+import { PreInterviewCheck } from "@/components/PreInterviewCheck";
 
 const Index = () => {
   const [hasConsent, setHasConsent] = useState<boolean>(false);
   const [showConsent, setShowConsent] = useState<boolean>(true);
-  const { startRecording, stopRecording, isRecording, stream } =
-    useVideoRecording();
+  const [setupComplete, setSetupComplete] = useState<boolean>(false);
+  const {
+    startRecording,
+    stopRecording,
+    isRecording,
+    stream,
+    screenStream,
+    cameraStream,
+  } = useVideoRecording();
 
   const handleConsent = () => {
     setHasConsent(true);
     setShowConsent(false);
-    startRecording();
+  };
+
+  const handleSetupComplete = async () => {
+    try {
+      setSetupComplete(true);
+    } catch (error) {
+      console.error("Failed to complete setup:", error);
+    }
   };
 
   useEffect(() => {
@@ -70,47 +85,25 @@ const Index = () => {
         </DialogContent>
       </Dialog>
 
-      {hasConsent && (
-        <div className="h-screen">
-          <div className="hidden">
-            <VideoRecorder />
+      {hasConsent && !setupComplete && (
+        <PreInterviewCheck
+          onComplete={handleSetupComplete}
+          startRecording={startRecording}
+        />
+      )}
+
+      {hasConsent && setupComplete && (
+        <div className="h-screen grid grid-cols-[400px,1fr] gap-4 p-4">
+          <div className="relative h-full">
+            <VideoRecorder
+              stream={stream}
+              screenStream={screenStream}
+              cameraStream={cameraStream}
+            />
           </div>
-
-          {isRecording && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="fixed w-40 h-28 top-4 right-4 flex items-center gap-3 bg-black/80 backdrop-blur-sm text-white p-2 rounded-full shadow-lg z-50"
-            >
-              <div className="relative">
-                <video
-                  autoPlay
-                  muted
-                  playsInline
-                  className="w-24 h-24 rounded-full object-cover"
-                  style={{ transform: "scaleX(-1)" }}
-                  ref={(videoElement) => {
-                    if (videoElement && stream) {
-                      videoElement.srcObject = stream;
-                    }
-                  }}
-                />
-                <div className="absolute top-0 right-0 w-3 h-3">
-                  <div className="w-full h-full bg-red-500 rounded-full animate-pulse" />
-                </div>
-              </div>
-              <Video className="w-4 h-4" />
-            </motion.div>
-          )}
-
-          <div className="h-full p-4">
-            <div className="h-full flex flex-col max-w-7xl mx-auto">
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
-                AI Interviewer
-              </h2>
-              <div className="flex-1 bg-white dark:bg-gray-800 rounded-lg shadow-lg">
-                <Chat />
-              </div>
+          <div className="flex flex-col">
+            <div className="flex-1 bg-white dark:bg-gray-800 rounded-lg shadow-lg">
+              <Chat />
             </div>
           </div>
         </div>
