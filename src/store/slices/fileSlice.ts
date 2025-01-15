@@ -60,6 +60,20 @@ export const fetchMergedVideo = createAsyncThunk(
   }
 );
 
+export const deleteFolder = createAsyncThunk(
+  'file/deleteFolder',
+  async (folderId: string, { rejectWithValue }) => {
+    try {
+      const response = await axios.delete(`${BASE_URL}/delete/folders/${folderId}`, {
+        withCredentials: true
+      });
+      return folderId;
+    } catch (error) {
+      return rejectWithValue('Failed to delete recording');
+    }
+  }
+);
+
 const fileSlice = createSlice({
   name: 'file',
   initialState,
@@ -99,6 +113,12 @@ const fileSlice = createSlice({
       .addCase(fetchMergedVideo.rejected, (state, action) => {
         state.mergeLoading = false;
         state.mergeError = action.payload as string;
+      })
+      .addCase(deleteFolder.fulfilled, (state, action) => {
+        state.folders = state.folders.filter(folder => folder.name !== action.payload);
+      })
+      .addCase(deleteFolder.rejected, (state, action) => {
+        state.error = action.payload as string;
       });
   },
 });
