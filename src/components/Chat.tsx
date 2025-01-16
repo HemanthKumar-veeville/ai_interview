@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/components/ui/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
-import { Mic } from "lucide-react";
+import { Mic, X, Check } from "lucide-react";
 import OpenAI from "openai";
 import { format } from "date-fns";
 
@@ -47,6 +47,7 @@ export const Chat = () => {
   const [interimTranscript, setInterimTranscript] = useState<string>("");
   const [countdown, setCountdown] = useState(6);
   const [isTimerRunning, setIsTimerRunning] = useState(true);
+  const [isInterviewEnded, setIsInterviewEnded] = useState(false);
 
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null); // Ref to track the latest message
@@ -321,13 +322,70 @@ export const Chat = () => {
   const speak = (text: string) => {
     if ("speechSynthesis" in window) {
       const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = 0.9;
-      utterance.pitch = 1.0;
+
+      // Get all available voices
+      const voices = window.speechSynthesis.getVoices();
+
+      // Try to find an Indian English female voice in this priority:
+      // 1. Microsoft Heera (Indian English)
+      // 2. Any Indian English voice
+      // 3. Any English female voice from South Asia
+      // 4. Fallback to any female English voice
+      const indianFemaleVoice =
+        voices.find(
+          (voice) =>
+            voice.name.includes("Heera") && voice.lang.includes("en-IN")
+        ) ||
+        voices.find(
+          (voice) =>
+            voice.lang.includes("en-IN") || // Indian English
+            voice.name.includes("Indian") ||
+            voice.name.toLowerCase().includes("hindi") ||
+            voice.name.includes("Tamil") ||
+            voice.name.includes("Telugu")
+        ) ||
+        voices.find(
+          (voice) =>
+            (voice.name.includes("female") || voice.name.includes("Female")) &&
+            (voice.lang.includes("en-IN") || voice.lang.includes("en-GB"))
+        ) ||
+        voices.find(
+          (voice) =>
+            (voice.name.includes("female") || voice.name.includes("Female")) &&
+            voice.lang.includes("en")
+        );
+
+      if (indianFemaleVoice) {
+        utterance.voice = indianFemaleVoice;
+      }
+
+      // Adjust speech parameters for clearer Indian English accent
+      utterance.rate = 0.85; // Slower rate for better clarity
+      utterance.pitch = 1.2; // Slightly higher pitch for female voice
       utterance.volume = 1.0;
+
+      // Add slight pauses after punctuation for better understanding
+      const textWithPauses = text.replace(/([.,!?])\s+/g, "$1... ");
+      utterance.text = textWithPauses;
+
+      // Set to Indian English
+      utterance.lang = "en-IN";
 
       utterance.onend = () => startRecognition();
 
       stopRecognition();
+
+      // Log available voices for debugging (you can remove this later)
+      console.log(
+        "Available voices:",
+        voices.map((v) => `${v.name} (${v.lang})`)
+      );
+      console.log("Selected voice:", indianFemaleVoice?.name);
+
+      // Cancel any ongoing speech
+      window.speechSynthesis.cancel();
+
+      // Speak with the new settings
       window.speechSynthesis.speak(utterance);
     } else {
       toast({
@@ -338,9 +396,155 @@ export const Chat = () => {
     }
   };
 
+  // Add this after your other useEffect hooks
+  useEffect(() => {
+    let voicesLoaded = false;
+
+    const loadVoices = () => {
+      const voices = window.speechSynthesis.getVoices();
+      if (voices.length > 0) {
+        voicesLoaded = true;
+        // Log available voices for debugging (you can remove this later)
+        console.log(
+          "Loaded voices:",
+          voices.map((v) => `${v.name} (${v.lang})`)
+        );
+      }
+    };
+
+    loadVoices();
+
+    // Some browsers (like Chrome) need this event
+    if (window.speechSynthesis.onvoiceschanged !== undefined) {
+      window.speechSynthesis.onvoiceschanged = loadVoices;
+    }
+
+    // Try loading voices every 100ms for up to 3 seconds if they haven't loaded
+    const voiceLoadInterval = setInterval(() => {
+      if (!voicesLoaded) {
+        loadVoices();
+      } else {
+        clearInterval(voiceLoadInterval);
+      }
+    }, 100);
+
+    // Clear interval after 3 seconds
+    setTimeout(() => clearInterval(voiceLoadInterval), 3000);
+
+    return () => {
+      clearInterval(voiceLoadInterval);
+      if (window.speechSynthesis.onvoiceschanged !== undefined) {
+        window.speechSynthesis.onvoiceschanged = null;
+      }
+    };
+  }, []);
+
+  // Update the handleEndInterview function
+  const handleEndInterview = async () => {
+    try {
+      // Stop any ongoing speech
+      window.speechSynthesis.cancel();
+
+      // Stop speech recognition
+      stopRecognition();
+
+      // Clear all timeouts
+      if (silenceTimeoutRef.current) {
+        clearTimeout(silenceTimeoutRef.current);
+      }
+      if (noSpeechTimeoutRef.current) {
+        clearTimeout(noSpeechTimeoutRef.current);
+      }
+
+      // Stop all media tracks (camera, microphone)
+      if (navigator.mediaDevices) {
+        const tracks = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+          video: true,
+        });
+        tracks.getTracks().forEach((track) => track.stop());
+      }
+
+      // Add a closing message
+      const closingMessage: Message = {
+        id: Date.now().toString(),
+        content:
+          "Thank you for participating in this interview. The session has ended.",
+        role: "assistant",
+        timestamp: Date.now(),
+      };
+      setMessages((prev) => [...prev, closingMessage]);
+      speak(closingMessage.content);
+
+      // Reset states
+      setLiveTranscript("");
+      setInterimTranscript("");
+      setIsListening(false);
+      setIsLoading(false);
+
+      // Show toast notification
+      toast({
+        title: "Interview Ended",
+        description: "The interview session has been completed.",
+        duration: 3000,
+      });
+
+      // Set interview as ended (this will trigger the completion screen)
+      setTimeout(() => {
+        setIsInterviewEnded(true);
+      }, 2000); // Wait for 2 seconds to show the completion screen
+    } catch (error) {
+      console.error("Error ending interview:", error);
+      toast({
+        title: "Error",
+        description:
+          "There was an error ending the interview. Please close the tab.",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <div className="flex flex-col h-[85vh] bg-gray-50 dark:bg-gray-900 rounded-lg overflow-hidden">
-      {isTimerRunning ? (
+      {isInterviewEnded ? (
+        <div className="flex flex-col items-center justify-center h-full space-y-6 p-4">
+          <motion.div
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center"
+          >
+            <svg
+              className="w-12 h-12 text-white"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M5 13l4 4L19 7"
+              />
+            </svg>
+          </motion.div>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-center space-y-4"
+          >
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+              Interview Completed
+            </h2>
+            <p className="text-gray-600 dark:text-gray-400 max-w-md">
+              Thank you for participating in the interview. You may now close
+              this tab.
+            </p>
+            <p className="text-sm text-gray-500 dark:text-gray-500">
+              All recordings have been stopped and your session has ended.
+            </p>
+          </motion.div>
+        </div>
+      ) : isTimerRunning ? (
         <div className="flex items-center justify-center h-full">
           <div className="text-2xl font-semibold">
             Interview starts in: {countdown}s
@@ -399,7 +603,7 @@ export const Chat = () => {
             </div>
           </ScrollArea>
           <div className="p-4 border-t dark:border-gray-700 bg-white dark:bg-gray-800">
-            <div className="max-w-3xl mx-auto flex justify-center">
+            <div className="max-w-3xl mx-auto flex justify-center gap-4">
               <Button
                 className={`p-4 rounded-full ${
                   isListening ? "bg-red-500" : "bg-primary"
@@ -410,6 +614,12 @@ export const Chat = () => {
                 }
               >
                 <Mic className="w-6 h-6" />
+              </Button>
+              <Button
+                className="bg-red-600 hover:bg-red-700 text-white"
+                onClick={handleEndInterview}
+              >
+                End Interview
               </Button>
             </div>
           </div>
