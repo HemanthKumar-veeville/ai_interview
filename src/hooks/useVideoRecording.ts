@@ -124,23 +124,27 @@ export const useVideoRecording = () => {
   }, [toast, initializeInterviewer]);
 
   const stopRecording = useCallback(() => {
-    if (mediaRecorderRef.current && (stream || screenStream)) {
+    if (mediaRecorderRef.current && (stream || screenStream || cameraStream)) {
       mediaRecorderRef.current.stop();
 
-      // Stop all tracks in both streams
+      // Stop all tracks in all streams
       stream?.getTracks().forEach((track) => track.stop());
       screenStream?.getTracks().forEach((track) => track.stop());
+      cameraStream?.getTracks().forEach((track) => track.stop());
+      interviewerStream?.getTracks().forEach((track) => track.stop());
 
       setIsRecording(false);
       setStream(null);
       setScreenStream(null);
+      setCameraStream(null);
+      setInterviewerStream(null);
 
       toast({
         title: "Recording Stopped",
         description: "Your interview recording has been saved.",
       });
     }
-  }, [stream, screenStream, toast]);
+  }, [stream, screenStream, cameraStream, interviewerStream, toast]);
 
   const uploadChunk = async (chunk: Blob, chunkNumber: number) => {
     const formData = new FormData();

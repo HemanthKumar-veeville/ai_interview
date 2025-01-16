@@ -64,6 +64,31 @@ const Index = () => {
     };
   }, [isRecording, stream, stopRecording]);
 
+  useEffect(() => {
+    const handleInterviewEnd = () => {
+      if (cameraStream) {
+        cameraStream.getTracks().forEach((track) => {
+          track.stop();
+        });
+      }
+      if (screenStream) {
+        screenStream.getTracks().forEach((track) => {
+          track.stop();
+        });
+      }
+      if (interviewerStream) {
+        interviewerStream.getTracks().forEach((track) => {
+          track.stop();
+        });
+      }
+    };
+
+    window.addEventListener("endInterview", handleInterviewEnd);
+    return () => {
+      window.removeEventListener("endInterview", handleInterviewEnd);
+    };
+  }, [cameraStream, screenStream, interviewerStream]);
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
       <Dialog open={showConsent} onOpenChange={setShowConsent}>
@@ -94,18 +119,36 @@ const Index = () => {
       )}
 
       {hasConsent && setupComplete && (
-        <div className="h-screen grid grid-cols-[400px,1fr] gap-4 p-4">
-          <div className="relative h-full">
-            <VideoRecorder
-              stream={stream}
-              screenStream={screenStream}
-              cameraStream={cameraStream}
-              interviewerStream={interviewerStream}
-            />
-          </div>
-          <div className="flex flex-col">
+        <div
+          className={`h-screen ${
+            window.isInterviewEnded
+              ? "flex justify-center items-center p-4"
+              : "grid grid-cols-[400px,1fr] gap-4 p-4"
+          }`}
+        >
+          {!window.isInterviewEnded && (
+            <div className="relative h-full">
+              <VideoRecorder
+                stream={stream}
+                screenStream={screenStream}
+                cameraStream={cameraStream}
+                interviewerStream={interviewerStream}
+              />
+            </div>
+          )}
+          <div
+            className={`flex flex-col ${
+              window.isInterviewEnded ? "w-full max-w-3xl" : ""
+            }`}
+          >
             <div className="flex-1 bg-white dark:bg-gray-800 rounded-lg shadow-lg">
-              <Chat />
+              <Chat
+                onInterviewEnd={() => {
+                  window.isInterviewEnded = true;
+                  // Force a re-render to update the layout
+                  window.dispatchEvent(new Event("resize"));
+                }}
+              />
             </div>
           </div>
         </div>

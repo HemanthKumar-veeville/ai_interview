@@ -37,7 +37,12 @@ const SYSTEM_PROMPT = `You are an AI interviewer conducting a professional job i
 - Do not move to the next question until the candidate has answered the current one.
 - Please don't repeat the same question again, if already answered`;
 
-export const Chat = () => {
+// Add onInterviewEnd prop to Chat component
+interface ChatProps {
+  onInterviewEnd: () => void;
+}
+
+export const Chat = ({ onInterviewEnd }: ChatProps) => {
   const { toast } = useToast();
   const [apiKey, setApiKey] = useState<string>(OPEN_AI_KEY);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -48,6 +53,8 @@ export const Chat = () => {
   const [countdown, setCountdown] = useState(6);
   const [isTimerRunning, setIsTimerRunning] = useState(true);
   const [isInterviewEnded, setIsInterviewEnded] = useState(false);
+  const [stream, setStream] = useState<MediaStream | null>(null);
+  const [videoFeeds, setVideoFeeds] = useState<boolean>(true);
 
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null); // Ref to track the latest message
@@ -442,6 +449,15 @@ export const Chat = () => {
   // Update the handleEndInterview function
   const handleEndInterview = async () => {
     try {
+      // Hide video feeds immediately
+      setVideoFeeds(false);
+
+      // Notify parent component that interview has ended
+      onInterviewEnd();
+
+      // Dispatch custom event to stop all media tracks
+      window.dispatchEvent(new CustomEvent("endInterview"));
+
       // Stop any ongoing speech
       window.speechSynthesis.cancel();
 
@@ -456,13 +472,24 @@ export const Chat = () => {
         clearTimeout(noSpeechTimeoutRef.current);
       }
 
-      // Stop all media tracks (camera, microphone)
-      if (navigator.mediaDevices) {
-        const tracks = await navigator.mediaDevices.getUserMedia({
-          audio: true,
-          video: true,
+      // Stop all media tracks (camera, microphone) if they exist
+      if (stream) {
+        stream.getTracks().forEach((track) => {
+          track.stop();
         });
-        tracks.getTracks().forEach((track) => track.stop());
+        setStream(null);
+      }
+
+      // Stop any existing media tracks without requesting new permissions
+      const existingTracks = await navigator.mediaDevices
+        .getUserMedia({
+          audio: false,
+          video: false,
+        })
+        .catch(() => null);
+
+      if (existingTracks) {
+        existingTracks.getTracks().forEach((track) => track.stop());
       }
 
       // Add a closing message
@@ -473,10 +500,24 @@ export const Chat = () => {
         role: "assistant",
         timestamp: Date.now(),
       };
-      setMessages((prev) => [...prev, closingMessage]);
-      speak(closingMessage.content);
 
-      // Reset states
+      // Speak the closing message and wait for it to finish
+      const speakClosing = new Promise<void>((resolve) => {
+        const utterance = new SpeechSynthesisUtterance(closingMessage.content);
+        utterance.onend = () => {
+          // Cancel any remaining speech synthesis
+          window.speechSynthesis.cancel();
+          resolve();
+        };
+        window.speechSynthesis.speak(utterance);
+      });
+
+      setMessages((prev) => [...prev, closingMessage]);
+
+      // Wait for the closing message to be spoken
+      await speakClosing;
+
+      // Reset all states
       setLiveTranscript("");
       setInterimTranscript("");
       setIsListening(false);
@@ -485,14 +526,13 @@ export const Chat = () => {
       // Show toast notification
       toast({
         title: "Interview Ended",
-        description: "The interview session has been completed.",
+        description:
+          "All recordings have been stopped and your session has ended.",
         duration: 3000,
       });
 
       // Set interview as ended (this will trigger the completion screen)
-      setTimeout(() => {
-        setIsInterviewEnded(true);
-      }, 2000); // Wait for 2 seconds to show the completion screen
+      setIsInterviewEnded(true);
     } catch (error) {
       console.error("Error ending interview:", error);
       toast({
@@ -505,43 +545,56 @@ export const Chat = () => {
   };
 
   return (
-    <div className="flex flex-col h-[85vh] bg-gray-50 dark:bg-gray-900 rounded-lg overflow-hidden">
+    <div
+      className={`flex flex-col ${
+        isInterviewEnded ? "min-h-[600px]" : "h-[85vh]"
+      } bg-gray-50 dark:bg-gray-900 rounded-lg overflow-hidden`}
+    >
       {isInterviewEnded ? (
-        <div className="flex flex-col items-center justify-center h-full space-y-6 p-4">
+        <div className="flex flex-col items-center justify-center h-full space-y-8 p-6">
           <motion.div
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
-            className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center"
+            className="w-24 h-24 bg-green-500 rounded-full flex items-center justify-center"
           >
-            <svg
-              className="w-12 h-12 text-white"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M5 13l4 4L19 7"
-              />
-            </svg>
+            <Check className="w-14 h-14 text-white" />
           </motion.div>
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="text-center space-y-4"
+            className="text-center space-y-6 max-w-lg mx-auto"
           >
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+            <h2 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
               Interview Completed
             </h2>
-            <p className="text-gray-600 dark:text-gray-400 max-w-md">
-              Thank you for participating in the interview. You may now close
-              this tab.
-            </p>
-            <p className="text-sm text-gray-500 dark:text-gray-500">
-              All recordings have been stopped and your session has ended.
-            </p>
+            <div className="space-y-4">
+              <p className="text-lg text-gray-600 dark:text-gray-400">
+                Thank you for participating in the interview. Your session has
+                been successfully completed.
+              </p>
+              <div className="bg-gray-100 dark:bg-gray-800 rounded-lg p-4">
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                  Session Status:
+                </h3>
+                <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-2">
+                  <li className="flex items-center">
+                    <Check className="w-4 h-4 text-green-500 mr-2" />
+                    Camera and microphone access terminated
+                  </li>
+                  <li className="flex items-center">
+                    <Check className="w-4 h-4 text-green-500 mr-2" />
+                    Screen recording stopped
+                  </li>
+                  <li className="flex items-center">
+                    <Check className="w-4 h-4 text-green-500 mr-2" />
+                    All audio instances cleared
+                  </li>
+                </ul>
+              </div>
+              <p className="text-sm text-gray-500 dark:text-gray-500 mt-4">
+                You may now safely close this tab.
+              </p>
+            </div>
           </motion.div>
         </div>
       ) : isTimerRunning ? (
