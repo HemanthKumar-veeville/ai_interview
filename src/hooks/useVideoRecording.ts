@@ -57,7 +57,7 @@ export const useVideoRecording = () => {
       setCameraStream(cameraStream);
       await initializeInterviewer();
 
-      // Request screen sharing (hidden from user, used for recording both feeds)
+      // Request screen sharing
       const displayStream = await navigator.mediaDevices.getDisplayMedia({
         video: true,
         audio: true,
@@ -67,32 +67,41 @@ export const useVideoRecording = () => {
       const audioContext = new AudioContext();
       const destination = audioContext.createMediaStreamDestination();
 
-      // Add system audio (AI speech)
+      // Add system audio (AI speech from screen capture)
       if (displayStream.getAudioTracks().length > 0) {
         const systemSource = audioContext.createMediaStreamSource(displayStream);
         systemSource.connect(destination);
       }
 
-      // Add microphone audio
+      // Add microphone audio (applicant's voice)
       if (cameraStream.getAudioTracks().length > 0) {
         const micSource = audioContext.createMediaStreamSource(cameraStream);
-        micSource.connect(destination);
+        const gainNode = audioContext.createGain();
+        gainNode.gain.value = 1.0; // Adjust microphone volume if needed
+        micSource.connect(gainNode);
+        gainNode.connect(destination);
       }
 
-      // Combine all tracks
-      const tracks = [
+      // Combine all video and audio tracks
+      const combinedTracks = [
         ...displayStream.getVideoTracks(),
         ...destination.stream.getAudioTracks(),
+        ...cameraStream.getAudioTracks() // Include the original microphone track
       ];
-      const combinedStream = new MediaStream(tracks);
+
+      const combinedStream = new MediaStream(combinedTracks);
 
       setStream(combinedStream);
       setScreenStream(displayStream);
 
       // Initialize MediaRecorder with combined stream
-      mediaRecorderRef.current = new MediaRecorder(combinedStream, {
-        mimeType: "video/webm;codecs=vp8,opus",
-      });
+      const options = {
+        mimeType: 'video/webm;codecs=vp8,opus',
+        audioBitsPerSecond: 128000,
+        videoBitsPerSecond: 2500000
+      };
+
+      mediaRecorderRef.current = new MediaRecorder(combinedStream, options);
 
       chunksRef.current = [];
 

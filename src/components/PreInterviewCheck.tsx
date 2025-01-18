@@ -64,7 +64,11 @@ export const PreInterviewCheck: React.FC<PreInterviewCheckProps> = ({
             width: { ideal: 1280 },
             height: { ideal: 720 },
           },
-          audio: true,
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          },
         });
 
         if (!mounted) {
@@ -80,8 +84,8 @@ export const PreInterviewCheck: React.FC<PreInterviewCheckProps> = ({
         // Setup audio analysis
         const audioContext = new AudioContext();
         const analyser = audioContext.createAnalyser();
-        const source = audioContext.createMediaStreamSource(mediaStream);
-        source.connect(analyser);
+        const microphone = audioContext.createMediaStreamSource(mediaStream);
+        microphone.connect(analyser);
         analyser.fftSize = 256;
 
         if (mounted) {
