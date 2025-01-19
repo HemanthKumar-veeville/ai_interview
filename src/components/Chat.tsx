@@ -99,9 +99,9 @@ const INTERVIEW_QUESTIONS = [
     },
   },
   {
-    id: "documents",
+    id: "resume",
     content: (name: string) =>
-      `Excellent, ${name}! You've got an impressive background! 🌟\n\nNow, let's take the next step together. Could you please share:\n- Your latest Resume 📄\n- A personalized Cover Letter ✉️ (Optional but highly appreciated!)\n\nYour experience could be exactly what we're looking for at Tesco! 💫`,
+      `Excellent, ${name}! You've got an impressive background! 🌟\n\nNow, let's take the next step together. Could you please share your latest Resume? 📄`,
     type: "upload",
     validation: (files: FileList) => {
       return files.length > 0
@@ -109,8 +109,21 @@ const INTERVIEW_QUESTIONS = [
         : {
             valid: false,
             message: (name: string) =>
-              `${name}, please provide at least your resume to proceed.`,
+              `${name}, please provide your resume to proceed.`,
           };
+    },
+  },
+  {
+    id: "coverletter",
+    content: (name: string) =>
+      `Thank you for sharing your resume, ${name}! 📄\n\nWould you like to include a Cover Letter with your application? ✉️\nWhile optional, a personalized cover letter can help us better understand your motivation!`,
+    type: "upload",
+    validation: (files: FileList) => {
+      // Cover letter is optional, so always return valid
+      return {
+        valid: true,
+        value: files.length > 0 ? Array.from(files) : null,
+      };
     },
   },
   {
