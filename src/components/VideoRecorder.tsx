@@ -52,7 +52,7 @@ export const VideoRecorder: React.FC<VideoRecorderProps> = ({
         />
         <div className="absolute top-4 left-4 px-3 py-1.5 bg-black/50 backdrop-blur-sm rounded-lg text-white font-medium text-sm flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-green-500"></div>
-          Riya
+          TARA
         </div>
       </Card>
 

@@ -117,12 +117,28 @@ const INTERVIEW_QUESTIONS = [
     id: "coverletter",
     content: (name: string) =>
       `Thank you for sharing your resume, ${name}! 📄\n\nWould you like to include a Cover Letter with your application? ✉️\nWhile optional, a personalized cover letter can help us better understand your motivation!`,
-    type: "upload",
-    validation: (files: FileList) => {
-      // Cover letter is optional, so always return valid
+    type: "choice",
+    options: [
+      {
+        id: "yes",
+        label: "Yes, I'll upload a cover letter ✉️",
+      },
+      {
+        id: "no",
+        label: "No, proceed without cover letter ➡️",
+      },
+    ],
+    validation: (answer: string) => {
+      if (answer === "yes") {
+        return {
+          valid: true,
+          value: "pending_upload",
+          requiresUpload: true,
+        };
+      }
       return {
         valid: true,
-        value: files.length > 0 ? Array.from(files) : null,
+        value: null,
       };
     },
   },
@@ -139,41 +155,53 @@ const QuestionContent = ({
   userName,
   onAnswer,
   showChoices,
+  isValidationFailed,
+  isCoverLetterUpload,
 }: {
   question: (typeof INTERVIEW_QUESTIONS)[number];
   userName: string;
   onAnswer: (answer: string | FileList) => void;
   showChoices: boolean;
+  isValidationFailed: boolean;
+  isCoverLetterUpload: boolean;
 }) => {
   const [selectedOption, setSelectedOption] = useState<string>("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Reset selected option when question changes
   useEffect(() => {
     setSelectedOption("");
   }, [question.id]);
 
-  // Add effect to scroll after component renders
-  useEffect(() => {
-    if (showChoices) {
-      requestAnimationFrame(() => {
-        messagesEndRef.current?.scrollIntoView({
-          behavior: "smooth",
-          block: "end",
-        });
-      });
-    }
-  }, [showChoices]);
+  // Don't show choices if validation failed or not meant to show
+  if (!showChoices || isValidationFailed) return null;
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const content =
-    typeof question.content === "function"
-      ? question.content(userName)
-      : question.content;
-
-  if (!showChoices) return null;
+  // Show upload button for cover letter if in upload mode
+  if (isCoverLetterUpload && question.id === "coverletter") {
+    return (
+      <div className="mt-4">
+        <input
+          type="file"
+          ref={fileInputRef}
+          className="hidden"
+          multiple
+          onChange={(e) => e.target.files && onAnswer(e.target.files)}
+        />
+        <Button
+          onClick={() => fileInputRef.current?.click()}
+          className="w-full"
+        >
+          Upload Cover Letter
+        </Button>
+      </div>
+    );
+  }
 
   switch (question.type) {
+    case "text":
+      // For name input, we'll use speech recognition only
+      return null;
+
     case "choice":
       return (
         <Card className="mt-4">
@@ -182,7 +210,6 @@ const QuestionContent = ({
               value={selectedOption}
               onValueChange={(value) => {
                 setSelectedOption(value);
-                // Add a small delay to allow the UI to update before proceeding
                 setTimeout(() => onAnswer(value), 300);
               }}
             >
@@ -230,7 +257,7 @@ const QuestionContent = ({
             onClick={() => fileInputRef.current?.click()}
             className="w-full"
           >
-            Upload Documents
+            {question.id === "resume" ? "Upload Resume" : "Upload Cover Letter"}
           </Button>
         </div>
       );
@@ -256,6 +283,8 @@ export const Chat = ({ onInterviewEnd }: ChatProps) => {
   const [userName, setUserName] = useState<string>("");
   const [answers, setAnswers] = useState<Record<string, any>>({});
   const [showChoices, setShowChoices] = useState(false);
+  const [isValidationFailed, setIsValidationFailed] = useState(false);
+  const [isCoverLetterUpload, setIsCoverLetterUpload] = useState(false);
 
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -525,6 +554,37 @@ export const Chat = ({ onInterviewEnd }: ChatProps) => {
         .trim();
 
       const utterance = new SpeechSynthesisUtterance(textWithoutEmojis);
+
+      // Get all available voices
+      const voices = window.speechSynthesis.getVoices();
+
+      // Try to find a female British/Indian English voice
+      const preferredVoice =
+        voices.find(
+          (voice) =>
+            (voice.name.includes("Female") || !voice.name.includes("Male")) &&
+            (voice.name.includes("British") ||
+              voice.name.includes("Indian") ||
+              voice.name.includes("UK") ||
+              voice.lang === "en-GB")
+        ) ||
+        voices.find(
+          // Fallback to any female English voice
+          (voice) =>
+            (voice.name.includes("Female") || !voice.name.includes("Male")) &&
+            voice.lang.startsWith("en")
+        );
+
+      if (preferredVoice) {
+        utterance.voice = preferredVoice;
+      }
+
+      // Set speech properties for clarity
+      utterance.rate = 0.9; // Slightly slower speed
+      utterance.pitch = 1.1; // Slightly higher pitch for female voice
+      utterance.volume = 1.0; // Full volume
+      utterance.lang = "en-GB"; // British English
+
       currentUtteranceRef.current = utterance;
 
       const keepAlive = () => {
@@ -546,7 +606,9 @@ export const Chat = ({ onInterviewEnd }: ChatProps) => {
         currentUtteranceRef.current = null;
         setShowChoices(true);
 
-        if (currentQuestionIndex < INTERVIEW_QUESTIONS.length - 1) {
+        // Only start recognition for text-type questions
+        const currentQuestion = INTERVIEW_QUESTIONS[currentQuestionIndex];
+        if (currentQuestion?.type === "text" && currentQuestion.id !== "name") {
           setTimeout(() => {
             if (!isSpeakingRef.current) {
               startRecognition();
@@ -569,7 +631,8 @@ export const Chat = ({ onInterviewEnd }: ChatProps) => {
 
     setIsLoading(true);
     stopRecognition();
-    setShowChoices(false); // Hide choices when processing answer
+    setShowChoices(false);
+    setIsValidationFailed(false);
 
     if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current);
     if (noSpeechTimeoutRef.current) clearTimeout(noSpeechTimeoutRef.current);
@@ -590,11 +653,10 @@ export const Chat = ({ onInterviewEnd }: ChatProps) => {
 
     try {
       const currentQuestion = INTERVIEW_QUESTIONS[currentQuestionIndex];
-
-      // Validate answer
       const validationResult = currentQuestion.validation?.(answer);
 
       if (!validationResult?.valid) {
+        setIsValidationFailed(true);
         const rejectionMessage =
           typeof validationResult?.message === "function"
             ? validationResult.message(userName)
@@ -609,8 +671,27 @@ export const Chat = ({ onInterviewEnd }: ChatProps) => {
 
         setMessages((prev) => [...prev, rejectionMsgObj]);
         await speak(rejectionMessage);
-        setTimeout(handleEndInterview, 5000);
         return;
+      }
+
+      // Handle cover letter choice
+      if (currentQuestion.id === "coverletter") {
+        if (typeof answer === "string" && answer === "yes") {
+          setIsCoverLetterUpload(true);
+          const uploadMessage: Message = {
+            id: Date.now().toString(),
+            content: "Please upload your cover letter.",
+            role: "assistant",
+            timestamp: Date.now(),
+          };
+          setMessages((prev) => [...prev, uploadMessage]);
+          await speak(uploadMessage.content);
+          setShowChoices(true);
+          return;
+        } else if (answer instanceof FileList) {
+          // Reset cover letter upload mode after file is uploaded
+          setIsCoverLetterUpload(false);
+        }
       }
 
       // Store answer
@@ -642,6 +723,15 @@ export const Chat = ({ onInterviewEnd }: ChatProps) => {
         setMessages((prev) => [...prev, nextMessage]);
         setCurrentQuestionIndex((prev) => prev + 1);
         await speak(nextContent);
+
+        // Only start recognition for text-type questions
+        if (nextQuestion.type === "text" && nextQuestion.id !== "name") {
+          setTimeout(() => {
+            if (!isSpeakingRef.current) {
+              startRecognition();
+            }
+          }, 1000);
+        }
       } else {
         handleEndInterview();
       }
@@ -865,6 +955,8 @@ export const Chat = ({ onInterviewEnd }: ChatProps) => {
                     userName={userName}
                     onAnswer={handleAnswer}
                     showChoices={showChoices}
+                    isValidationFailed={isValidationFailed}
+                    isCoverLetterUpload={isCoverLetterUpload}
                   />
                 )}
 
@@ -874,24 +966,35 @@ export const Chat = ({ onInterviewEnd }: ChatProps) => {
           </ScrollArea>
 
           <div className="p-4 border-t dark:border-gray-700 bg-white dark:bg-gray-800">
-            <div className="max-w-3xl mx-auto flex justify-center gap-4">
-              <Button
-                className={`p-4 rounded-full ${
-                  isListening ? "bg-red-500" : "bg-primary"
-                } text-white`}
-                size="icon"
-                onClick={() =>
-                  isListening ? stopRecognition() : startRecognition()
-                }
-              >
-                <Mic className="w-6 h-6" />
-              </Button>
-              <Button
-                className="bg-red-600 hover:bg-red-700 text-white"
-                onClick={handleEndInterview}
-              >
-                End Interview
-              </Button>
+            <div className="max-w-3xl mx-auto flex flex-col items-center gap-2">
+              <div className="flex justify-center gap-4">
+                <div className="flex flex-col items-center">
+                  <Button
+                    className={`p-4 rounded-full ${
+                      isListening ? "bg-red-500" : "bg-primary"
+                    } text-white`}
+                    size="icon"
+                    onClick={() =>
+                      isListening ? stopRecognition() : startRecognition()
+                    }
+                  >
+                    <Mic className="w-6 h-6" />
+                  </Button>
+                  <span className="text-xs mt-1 text-gray-600 dark:text-gray-400">
+                    {isListening
+                      ? "Listening..."
+                      : isSpeakingRef.current
+                      ? "Speaking..."
+                      : ""}
+                  </span>
+                </div>
+                <Button
+                  className="bg-red-600 hover:bg-red-700 text-white"
+                  onClick={handleEndInterview}
+                >
+                  End Interview
+                </Button>
+              </div>
             </div>
           </div>
         </>
