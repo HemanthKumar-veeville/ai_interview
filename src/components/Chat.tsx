@@ -5,46 +5,230 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/components/ui/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
 import { Mic, X, Check } from "lucide-react";
-import OpenAI from "openai";
 import { format } from "date-fns";
+import { Card, CardContent } from "@/components/ui/card";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
 
-const OPEN_AI_KEY = import.meta.env.VITE_OPEN_AI_KEY;
-
-const SYSTEM_PROMPT = `You are an AI interviewer conducting a professional job interview. Your goal is to assess the candidate's suitability for the role in a structured and efficient manner. Follow these steps internally while interacting with the candidate:  
-
-1. **Stage 1: Candidate Profile Assessment**  
-   - Start with a friendly and professional introduction.  
-   - Ask one concise question at a time to gather key information about the candidate's background, experience, skills, and qualifications.  
-   - Focus on understanding their career goals, relevant expertise, and the role they are applying for.  
-   - Limit this stage to 4-6 short questions.  
-
-2. **Stage 2: Customized Assessment**  
-   - Based on the candidate's profile from Stage 1, design a tailored assessment module internally.  
-   - Ask one specific question or scenario at a time to evaluate their technical skills, problem-solving abilities, and cultural fit for the role.  
-   - Ensure the questions are relevant to their experience and the job requirements.  
-   - Limit this stage to 3-5 short questions.  
-
-3. **Stage 3: Analysis and Conclusion**  
-   - Internally evaluate the candidate's responses from Stage 2.  
-   - Provide a brief, professional analysis of their strengths, areas for improvement, and overall suitability for the role.  
-   - Conclude the interview with a polite closing statement, thanking the candidate for their time.  
-
-**Rules to follow:**  
-- Always ask one question at a time.  
-- Keep questions short, clear, and to the point (no more than 1-2 sentences per question).  
-- Do not reveal the internal structure or stages of the interview.  
-- Maintain a professional and conversational tone throughout.  
-- Do not move to the next question until the candidate has answered the current one.
-- Please don't repeat the same question again, if already answered`;
-
-// Add onInterviewEnd prop to Chat component
 interface ChatProps {
   onInterviewEnd: () => void;
 }
 
+// Enhanced interview questions with proper validation and UI options
+const INTERVIEW_QUESTIONS = [
+  {
+    id: "welcome",
+    content:
+      "🌟 Welcome to the Tesco Talent Gateway! 🌟\n\nHello! We're thrilled you're considering joining the Tesco family, where innovation and passion drive everything we do. Let's get started with a few quick questions to ensure the best match for you. 💼\n\nFirst things first, what's your name? 😊",
+    type: "text",
+    validation: (answer: string) => {
+      const name = answer.trim();
+      return name.length > 0
+        ? { valid: true, value: name }
+        : { valid: false, message: "Please provide your name to continue." };
+    },
+  },
+  {
+    id: "role",
+    content: (name: string) =>
+      `Wonderful to meet you, ${name}! 😊 Your journey with Tesco could be just around the corner!\n\nTell me, ${name}, which of these exciting roles interests you the most?`,
+    type: "choice",
+    options: [
+      { id: "sde2", label: "Software Development Engineer (SDE2) 👨‍💻" },
+      { id: "pm", label: "Product Manager 📊" },
+      { id: "others", label: "Others 🌀" },
+    ],
+    validation: (answer: string) => {
+      return answer === "others"
+        ? {
+            valid: false,
+            message: (name: string) =>
+              `Thank you for your enthusiasm, ${name}! 🌟 While we're currently focusing on specific roles, we'd love to keep you in our Tesco talent community for future opportunities.\n\n📧 Please send your resume to joinus@tesco.com, and we'll make sure to reach out when the perfect role opens up!`,
+          }
+        : { valid: true, value: answer };
+    },
+  },
+  {
+    id: "break",
+    content: (name: string) =>
+      `Thanks for sharing that, ${name}! 😊\n\nWe believe that career breaks can bring valuable perspectives. Have you had a career break in the past? Please select the duration: 🌱`,
+    type: "choice",
+    options: [
+      {
+        id: "sixplus",
+        label: "Greater than or equal to 6 months ✨",
+      },
+      {
+        id: "lesssix",
+        label: "Less than 6 months ⏳",
+      },
+    ],
+    validation: (answer: string) => {
+      return answer === "lesssix"
+        ? {
+            valid: false,
+            message: (name: string) =>
+              `We really appreciate your openness, ${name}! 🌟 At Tesco, we're specifically looking for candidates who've had a career break of over 6 months. Please stay connected with us at joinus@tesco.com for future opportunities that might be a perfect match! 💫`,
+          }
+        : { valid: true, value: "6+ months" };
+    },
+  },
+  {
+    id: "experience",
+    content: (name: string) =>
+      `You're doing great, ${name}! 🌟\n\nI'd love to hear about your professional journey. Please select your years of experience: 💼`,
+    type: "choice",
+    options: [
+      {
+        id: "fiveplus",
+        label: "Greater than or equal to 5 years 🚀",
+      },
+      {
+        id: "lessfive",
+        label: "Less than 5 years ⌛",
+      },
+    ],
+    validation: (answer: string) => {
+      return answer === "lessfive"
+        ? {
+            valid: false,
+            message: (name: string) =>
+              `Thank you for sharing your journey with us, ${name}! 🌟 While we're currently seeking candidates with over 5 years of experience, we'd love to keep in touch! Please send your resume to joinus@tesco.com, and we'll reach out when the perfect opportunity arises. Keep growing! 🚀`,
+          }
+        : { valid: true, value: "5+ years" };
+    },
+  },
+  {
+    id: "documents",
+    content: (name: string) =>
+      `Excellent, ${name}! You've got an impressive background! 🌟\n\nNow, let's take the next step together. Could you please share:\n- Your latest Resume 📄\n- A personalized Cover Letter ✉️ (Optional but highly appreciated!)\n\nYour experience could be exactly what we're looking for at Tesco! 💫`,
+    type: "upload",
+    validation: (files: FileList) => {
+      return files.length > 0
+        ? { valid: true, value: Array.from(files) }
+        : {
+            valid: false,
+            message: (name: string) =>
+              `${name}, please provide at least your resume to proceed.`,
+          };
+    },
+  },
+  {
+    id: "final",
+    content: (name: string) =>
+      `Thank you so much for your time today, ${name}! 🌟\n\nYou've shared some really impressive insights with us. Our team will carefully review your profile, and if you're shortlisted, we'll be in touch soon. We're excited about the possibility of having you join our Tesco family! ✨\n\nHave a wonderful day ahead! 😊`,
+    type: "end",
+  },
+];
+
+const QuestionContent = ({
+  question,
+  userName,
+  onAnswer,
+  showChoices,
+}: {
+  question: (typeof INTERVIEW_QUESTIONS)[number];
+  userName: string;
+  onAnswer: (answer: string | FileList) => void;
+  showChoices: boolean;
+}) => {
+  const [selectedOption, setSelectedOption] = useState<string>("");
+
+  // Reset selected option when question changes
+  useEffect(() => {
+    setSelectedOption("");
+  }, [question.id]);
+
+  // Add effect to scroll after component renders
+  useEffect(() => {
+    if (showChoices) {
+      requestAnimationFrame(() => {
+        messagesEndRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "end",
+        });
+      });
+    }
+  }, [showChoices]);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const content =
+    typeof question.content === "function"
+      ? question.content(userName)
+      : question.content;
+
+  if (!showChoices) return null;
+
+  switch (question.type) {
+    case "choice":
+      return (
+        <Card className="mt-4">
+          <CardContent className="pt-6">
+            <RadioGroup
+              value={selectedOption}
+              onValueChange={(value) => {
+                setSelectedOption(value);
+                // Add a small delay to allow the UI to update before proceeding
+                setTimeout(() => onAnswer(value), 300);
+              }}
+            >
+              {question.options?.map((option) => (
+                <div
+                  key={option.id}
+                  className={`
+                    flex items-center space-x-2 p-3 rounded-lg transition-colors cursor-pointer
+                    ${
+                      selectedOption === option.id
+                        ? "bg-primary/10 dark:bg-primary/20"
+                        : "hover:bg-gray-100 dark:hover:bg-gray-800"
+                    }
+                  `}
+                >
+                  <RadioGroupItem value={option.id} id={option.id} />
+                  <Label
+                    htmlFor={option.id}
+                    className={`flex-1 cursor-pointer ${
+                      selectedOption === option.id
+                        ? "font-medium text-primary dark:text-primary"
+                        : ""
+                    }`}
+                  >
+                    {option.label}
+                  </Label>
+                </div>
+              ))}
+            </RadioGroup>
+          </CardContent>
+        </Card>
+      );
+
+    case "upload":
+      return (
+        <div className="mt-4">
+          <input
+            type="file"
+            ref={fileInputRef}
+            className="hidden"
+            multiple
+            onChange={(e) => e.target.files && onAnswer(e.target.files)}
+          />
+          <Button
+            onClick={() => fileInputRef.current?.click()}
+            className="w-full"
+          >
+            Upload Documents
+          </Button>
+        </div>
+      );
+
+    default:
+      return null;
+  }
+};
+
 export const Chat = ({ onInterviewEnd }: ChatProps) => {
   const { toast } = useToast();
-  const [apiKey, setApiKey] = useState<string>(OPEN_AI_KEY);
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isListening, setIsListening] = useState(false);
@@ -55,25 +239,29 @@ export const Chat = ({ onInterviewEnd }: ChatProps) => {
   const [isInterviewEnded, setIsInterviewEnded] = useState(false);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [videoFeeds, setVideoFeeds] = useState<boolean>(true);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(0);
+  const [userName, setUserName] = useState<string>("");
+  const [answers, setAnswers] = useState<Record<string, any>>({});
+  const [showChoices, setShowChoices] = useState(false);
 
   const scrollAreaRef = useRef<HTMLDivElement>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null); // Ref to track the latest message
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const isRecognitionActive = useRef(false);
   const silenceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const noSpeechTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isSpeakingRef = useRef<boolean>(false);
+  const currentUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
 
   // Clean exit mechanism
   useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      // Stop speech recognition
       if (isRecognitionActive.current && recognitionRef.current) {
         recognitionRef.current.stop();
         isRecognitionActive.current = false;
         setIsListening(false);
       }
 
-      // Clear any pending timeouts
       if (silenceTimeoutRef.current) {
         clearTimeout(silenceTimeoutRef.current);
       }
@@ -81,37 +269,20 @@ export const Chat = ({ onInterviewEnd }: ChatProps) => {
         clearTimeout(noSpeechTimeoutRef.current);
       }
 
-      // Reset the state
       setMessages([]);
       setLiveTranscript("");
       setInterimTranscript("");
       setIsLoading(false);
     };
 
-    // Attach the event listener
     window.addEventListener("beforeunload", handleBeforeUnload);
 
-    // Cleanup the event listener on component unmount
     return () => {
       window.removeEventListener("beforeunload", handleBeforeUnload);
     };
   }, []);
 
-  // Load API key from localStorage or prompt the user
-  useEffect(() => {
-    const storedApiKey = OPEN_AI_KEY;
-    if (storedApiKey) {
-      setApiKey(storedApiKey);
-    } else {
-      const userApiKey = prompt("Please enter your OpenAI API key:");
-      if (userApiKey) {
-        localStorage.setItem("openai_api_key", userApiKey);
-        setApiKey(userApiKey);
-      }
-    }
-  }, []);
-
-  // Countdown timer for the interview start
+  // Countdown timer for interview start
   useEffect(() => {
     const timer = setInterval(() => {
       setCountdown((prev) => {
@@ -127,13 +298,6 @@ export const Chat = ({ onInterviewEnd }: ChatProps) => {
 
     return () => clearInterval(timer);
   }, []);
-
-  // Scroll to the bottom of the chat when messages or interimTranscript update
-  useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [messages, interimTranscript]);
 
   // Initialize speech recognition
   useEffect(() => {
@@ -157,34 +321,28 @@ export const Chat = ({ onInterviewEnd }: ChatProps) => {
       let finalTranscript = "";
       let interimTranscript = "";
 
-      Array.from(event.results).forEach((result, index) => {
-        if (result.isFinal) {
-          finalTranscript += result[0].transcript.trim() + " ";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript.trim();
+        if (event.results[i].isFinal) {
+          finalTranscript = transcript;
+          break;
         } else {
-          interimTranscript += result[0].transcript.trim() + " ";
+          interimTranscript = transcript;
         }
-      });
-
-      setLiveTranscript((prev) => (finalTranscript ? finalTranscript : prev));
-      setInterimTranscript(interimTranscript);
-
-      if (noSpeechTimeoutRef.current) {
-        clearTimeout(noSpeechTimeoutRef.current);
       }
-      noSpeechTimeoutRef.current = setTimeout(() => {
-        if (!finalTranscript.trim() && !interimTranscript.trim()) {
-          repeatLastQuestion();
-        }
-      }, 10000);
 
       if (finalTranscript) {
+        setLiveTranscript(finalTranscript);
         if (silenceTimeoutRef.current) {
           clearTimeout(silenceTimeoutRef.current);
         }
         silenceTimeoutRef.current = setTimeout(() => {
-          handleSend(finalTranscript.trim());
-        }, 2000);
+          if (!isSpeakingRef.current) {
+            handleAnswer(finalTranscript);
+          }
+        }, 1500);
       }
+      setInterimTranscript(interimTranscript);
     };
 
     recognitionRef.current.onerror = () => {
@@ -210,200 +368,47 @@ export const Chat = ({ onInterviewEnd }: ChatProps) => {
     };
   }, []);
 
-  // Start speech recognition
-  const startRecognition = () => {
-    if (!isRecognitionActive.current && recognitionRef.current) {
-      recognitionRef.current.start();
-      isRecognitionActive.current = true;
-      setIsListening(true);
-    }
-  };
-
-  // Stop speech recognition
-  const stopRecognition = () => {
-    if (isRecognitionActive.current && recognitionRef.current) {
-      recognitionRef.current.stop();
-      isRecognitionActive.current = false;
-      setIsListening(false);
-    }
-  };
-
-  // Restart speech recognition
-  const restartRecognition = () => {
-    stopRecognition();
-    setTimeout(() => startRecognition(), 500);
-  };
-
-  // Initialize the conversation with a greeting from the AI
-  const initiateConversation = () => {
-    const initialMessage = {
-      id: "1",
-      content:
-        "Hi, I'm Riya! I'll be conducting your interview today. Could you please introduce yourself and tell me about your professional background?",
-      role: "assistant",
-      timestamp: Date.now(),
-    };
-    setMessages([initialMessage]);
-    speak(initialMessage.content);
-  };
-
-  // Handle sending a message to the AI
-  const handleSend = async (message: string) => {
-    if (!message.trim()) return;
-
-    stopRecognition();
-
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      content: message,
-      role: "user",
-      timestamp: Date.now(),
-    };
-
-    setMessages((prev) => [...prev, userMessage]);
-    setLiveTranscript("");
-    setInterimTranscript("");
-    setIsLoading(true);
-
-    try {
-      const openai = new OpenAI({
-        apiKey: apiKey,
-        dangerouslyAllowBrowser: true,
-      });
-
-      const response = await openai.chat.completions.create({
-        model: "gpt-4",
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          ...messages.map((msg) => ({
-            role: msg.role as "user" | "assistant",
-            content: msg.content,
-          })),
-          { role: "user", content: message },
-        ],
-        temperature: 0.7,
-        max_tokens: 100,
-      });
-
-      const aiMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        content:
-          response.choices[0]?.message?.content ||
-          "I couldn't generate a response. Please try again.",
-        role: "assistant",
-        timestamp: Date.now(),
-      };
-
-      setMessages((prev) => [...prev, aiMessage]);
-      speak(aiMessage.content);
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to fetch AI response.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Repeat the last question if no speech is detected
-  const repeatLastQuestion = () => {
-    const lastMessage = messages[messages.length - 1];
-    if (lastMessage && lastMessage.role === "assistant") {
-      const repeatedQuestion = `I repeat: ${lastMessage.content}`;
-      speak(repeatedQuestion);
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: Date.now().toString(),
-          content: repeatedQuestion,
-          role: "assistant",
-          timestamp: Date.now(),
-        },
-      ]);
-    }
-  };
-
-  // Speak the AI's response using text-to-speech
-  const speak = (text: string) => {
-    if ("speechSynthesis" in window) {
-      const utterance = new SpeechSynthesisUtterance(text);
-
-      // Get all available voices
-      const voices = window.speechSynthesis.getVoices();
-
-      // Try to find an Indian English female voice in this priority:
-      // 1. Microsoft Heera (Indian English)
-      // 2. Any Indian English voice
-      // 3. Any English female voice from South Asia
-      // 4. Fallback to any female English voice
-      const indianFemaleVoice =
-        voices.find(
-          (voice) =>
-            voice.name.includes("Heera") && voice.lang.includes("en-IN")
-        ) ||
-        voices.find(
-          (voice) =>
-            voice.lang.includes("en-IN") || // Indian English
-            voice.name.includes("Indian") ||
-            voice.name.toLowerCase().includes("hindi") ||
-            voice.name.includes("Tamil") ||
-            voice.name.includes("Telugu")
-        ) ||
-        voices.find(
-          (voice) =>
-            (voice.name.includes("female") || voice.name.includes("Female")) &&
-            (voice.lang.includes("en-IN") || voice.lang.includes("en-GB"))
-        ) ||
-        voices.find(
-          (voice) =>
-            (voice.name.includes("female") || voice.name.includes("Female")) &&
-            voice.lang.includes("en")
-        );
-
-      if (indianFemaleVoice) {
-        utterance.voice = indianFemaleVoice;
+  // Modify the existing useEffect for scroll behavior
+  useEffect(() => {
+    const scrollToBottom = () => {
+      if (messagesEndRef.current) {
+        // Use requestAnimationFrame to ensure DOM updates are complete
+        requestAnimationFrame(() => {
+          messagesEndRef.current?.scrollIntoView({
+            behavior: "smooth",
+            block: "end",
+          });
+        });
       }
+    };
 
-      // Adjust speech parameters for clearer Indian English accent
-      utterance.rate = 0.85; // Slower rate for better clarity
-      utterance.pitch = 1.2; // Slightly higher pitch for female voice
-      utterance.volume = 1.0;
+    // Scroll on messages change
+    scrollToBottom();
 
-      // Add slight pauses after punctuation for better understanding
-      const textWithPauses = text.replace(/([.,!?])\s+/g, "$1... ");
-      utterance.text = textWithPauses;
+    // Scroll when choices are shown
+    if (showChoices) {
+      scrollToBottom();
+    }
 
-      // Set to Indian English
-      utterance.lang = "en-IN";
+    // Scroll when interim transcript changes
+    if (interimTranscript) {
+      scrollToBottom();
+    }
+  }, [messages, showChoices, interimTranscript]);
 
-      utterance.onend = () => startRecognition();
-
-      stopRecognition();
-
-      // Log available voices for debugging (you can remove this later)
-      console.log(
-        "Available voices:",
-        voices.map((v) => `${v.name} (${v.lang})`)
-      );
-      console.log("Selected voice:", indianFemaleVoice?.name);
-
-      // Cancel any ongoing speech
-      window.speechSynthesis.cancel();
-
-      // Speak with the new settings
-      window.speechSynthesis.speak(utterance);
-    } else {
-      toast({
-        title: "Error",
-        description: "Text-to-speech is not supported in your browser.",
-        variant: "destructive",
+  // Add this useEffect to handle scroll when currentQuestionIndex changes
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      requestAnimationFrame(() => {
+        messagesEndRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "end",
+        });
       });
     }
-  };
+  }, [currentQuestionIndex]);
 
-  // Add this after your other useEffect hooks
+  // Voice synthesis setup
   useEffect(() => {
     let voicesLoaded = false;
 
@@ -411,7 +416,6 @@ export const Chat = ({ onInterviewEnd }: ChatProps) => {
       const voices = window.speechSynthesis.getVoices();
       if (voices.length > 0) {
         voicesLoaded = true;
-        // Log available voices for debugging (you can remove this later)
         console.log(
           "Loaded voices:",
           voices.map((v) => `${v.name} (${v.lang})`)
@@ -421,12 +425,10 @@ export const Chat = ({ onInterviewEnd }: ChatProps) => {
 
     loadVoices();
 
-    // Some browsers (like Chrome) need this event
     if (window.speechSynthesis.onvoiceschanged !== undefined) {
       window.speechSynthesis.onvoiceschanged = loadVoices;
     }
 
-    // Try loading voices every 100ms for up to 3 seconds if they haven't loaded
     const voiceLoadInterval = setInterval(() => {
       if (!voicesLoaded) {
         loadVoices();
@@ -435,7 +437,6 @@ export const Chat = ({ onInterviewEnd }: ChatProps) => {
       }
     }, 100);
 
-    // Clear interval after 3 seconds
     setTimeout(() => clearInterval(voiceLoadInterval), 3000);
 
     return () => {
@@ -446,25 +447,233 @@ export const Chat = ({ onInterviewEnd }: ChatProps) => {
     };
   }, []);
 
-  // Update the handleEndInterview function
+  // Speech synthesis cleanup
+  useEffect(() => {
+    return () => {
+      window.speechSynthesis.cancel();
+      if (currentUtteranceRef.current) {
+        currentUtteranceRef.current = null;
+      }
+    };
+  }, []);
+
+  const startRecognition = () => {
+    if (
+      !isRecognitionActive.current &&
+      recognitionRef.current &&
+      !isSpeakingRef.current
+    ) {
+      recognitionRef.current.start();
+      isRecognitionActive.current = true;
+      setIsListening(true);
+    }
+  };
+
+  const stopRecognition = () => {
+    if (isRecognitionActive.current && recognitionRef.current) {
+      recognitionRef.current.stop();
+      isRecognitionActive.current = false;
+      setIsListening(false);
+    }
+  };
+
+  const restartRecognition = () => {
+    stopRecognition();
+    setTimeout(() => startRecognition(), 500);
+  };
+
+  const initiateConversation = () => {
+    const initialMessage: Message = {
+      id: "1",
+      content: INTERVIEW_QUESTIONS[0].content,
+      role: "assistant",
+      timestamp: Date.now(),
+    };
+    setMessages([initialMessage]);
+    speak(initialMessage.content);
+  };
+
+  const speak = (text: string) => {
+    if ("speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+      stopRecognition();
+      setShowChoices(false);
+
+      if (currentUtteranceRef.current) {
+        currentUtteranceRef.current = null;
+      }
+
+      // Remove emojis from text before speaking
+      const textWithoutEmojis = text
+        .replace(
+          /[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu,
+          ""
+        )
+        .trim();
+
+      const utterance = new SpeechSynthesisUtterance(textWithoutEmojis);
+      currentUtteranceRef.current = utterance;
+
+      const keepAlive = () => {
+        if (isSpeakingRef.current) {
+          window.speechSynthesis.pause();
+          window.speechSynthesis.resume();
+          setTimeout(keepAlive, 5000);
+        }
+      };
+
+      utterance.onstart = () => {
+        isSpeakingRef.current = true;
+        stopRecognition();
+        keepAlive();
+      };
+
+      utterance.onend = () => {
+        isSpeakingRef.current = false;
+        currentUtteranceRef.current = null;
+        setShowChoices(true);
+
+        if (currentQuestionIndex < INTERVIEW_QUESTIONS.length - 1) {
+          setTimeout(() => {
+            if (!isSpeakingRef.current) {
+              startRecognition();
+            }
+          }, 1000);
+        }
+      };
+
+      utterance.onerror = () => {
+        isSpeakingRef.current = false;
+        currentUtteranceRef.current = null;
+      };
+
+      window.speechSynthesis.speak(utterance);
+    }
+  };
+
+  const handleAnswer = async (answer: string | FileList) => {
+    if (!answer || isSpeakingRef.current || isLoading) return;
+
+    setIsLoading(true);
+    stopRecognition();
+    setShowChoices(false); // Hide choices when processing answer
+
+    if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current);
+    if (noSpeechTimeoutRef.current) clearTimeout(noSpeechTimeoutRef.current);
+
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      content:
+        typeof answer === "string"
+          ? answer
+          : `Uploaded ${answer.length} file(s)`,
+      role: "user",
+      timestamp: Date.now(),
+    };
+
+    setMessages((prev) => [...prev, userMessage]);
+    setLiveTranscript("");
+    setInterimTranscript("");
+
+    try {
+      const currentQuestion = INTERVIEW_QUESTIONS[currentQuestionIndex];
+
+      // Validate answer
+      const validationResult = currentQuestion.validation?.(answer);
+
+      if (!validationResult?.valid) {
+        const rejectionMessage =
+          typeof validationResult?.message === "function"
+            ? validationResult.message(userName)
+            : validationResult?.message;
+
+        const rejectionMsgObj: Message = {
+          id: Date.now().toString(),
+          content: rejectionMessage,
+          role: "assistant",
+          timestamp: Date.now(),
+        };
+
+        setMessages((prev) => [...prev, rejectionMsgObj]);
+        await speak(rejectionMessage);
+        setTimeout(handleEndInterview, 5000);
+        return;
+      }
+
+      // Store answer
+      setAnswers((prev) => ({
+        ...prev,
+        [currentQuestion.id]: validationResult.value,
+      }));
+
+      // Update username if it's the first question
+      if (currentQuestionIndex === 0) {
+        setUserName(validationResult.value);
+      }
+
+      // Move to next question
+      if (currentQuestionIndex < INTERVIEW_QUESTIONS.length - 1) {
+        const nextQuestion = INTERVIEW_QUESTIONS[currentQuestionIndex + 1];
+        const nextContent =
+          typeof nextQuestion.content === "function"
+            ? nextQuestion.content(userName || validationResult.value)
+            : nextQuestion.content;
+
+        const nextMessage: Message = {
+          id: Date.now().toString(),
+          content: nextContent,
+          role: "assistant",
+          timestamp: Date.now(),
+        };
+
+        setMessages((prev) => [...prev, nextMessage]);
+        setCurrentQuestionIndex((prev) => prev + 1);
+        await speak(nextContent);
+      } else {
+        handleEndInterview();
+      }
+    } catch (error) {
+      console.error("Error processing answer:", error);
+      toast({
+        title: "Error",
+        description: "There was an error processing your response.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const repeatLastQuestion = () => {
+    if (
+      !isSpeakingRef.current &&
+      messages.length > 0 &&
+      messages[messages.length - 1]?.role === "assistant"
+    ) {
+      const lastMessage = messages[messages.length - 1];
+      const repeatedContent = `I didn't catch that. Let me repeat: ${lastMessage.content}`;
+
+      speak(repeatedContent);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now().toString(),
+          content: repeatedContent,
+          role: "assistant",
+          timestamp: Date.now(),
+        },
+      ]);
+    }
+  };
+
   const handleEndInterview = async () => {
     try {
-      // Hide video feeds immediately
       setVideoFeeds(false);
-
-      // Notify parent component that interview has ended
       onInterviewEnd();
-
-      // Dispatch custom event to stop all media tracks
       window.dispatchEvent(new CustomEvent("endInterview"));
-
-      // Stop any ongoing speech
       window.speechSynthesis.cancel();
-
-      // Stop speech recognition
       stopRecognition();
 
-      // Clear all timeouts
       if (silenceTimeoutRef.current) {
         clearTimeout(silenceTimeoutRef.current);
       }
@@ -472,40 +681,30 @@ export const Chat = ({ onInterviewEnd }: ChatProps) => {
         clearTimeout(noSpeechTimeoutRef.current);
       }
 
-      // Stop all media tracks (camera, microphone) if they exist
       if (stream) {
-        stream.getTracks().forEach((track) => {
-          track.stop();
-        });
+        stream.getTracks().forEach((track) => track.stop());
         setStream(null);
       }
 
-      // Stop any existing media tracks without requesting new permissions
+      // Stop any existing media tracks
       const existingTracks = await navigator.mediaDevices
-        .getUserMedia({
-          audio: false,
-          video: false,
-        })
+        .getUserMedia({ audio: false, video: false })
         .catch(() => null);
 
       if (existingTracks) {
         existingTracks.getTracks().forEach((track) => track.stop());
       }
 
-      // Add a closing message
       const closingMessage: Message = {
         id: Date.now().toString(),
-        content:
-          "Thank you for participating in this interview. The session has ended.",
+        content: `Thank you for participating in this interview, ${userName}. The session has ended.`,
         role: "assistant",
         timestamp: Date.now(),
       };
 
-      // Speak the closing message and wait for it to finish
       const speakClosing = new Promise<void>((resolve) => {
         const utterance = new SpeechSynthesisUtterance(closingMessage.content);
         utterance.onend = () => {
-          // Cancel any remaining speech synthesis
           window.speechSynthesis.cancel();
           resolve();
         };
@@ -513,17 +712,13 @@ export const Chat = ({ onInterviewEnd }: ChatProps) => {
       });
 
       setMessages((prev) => [...prev, closingMessage]);
-
-      // Wait for the closing message to be spoken
       await speakClosing;
 
-      // Reset all states
       setLiveTranscript("");
       setInterimTranscript("");
       setIsListening(false);
       setIsLoading(false);
 
-      // Show toast notification
       toast({
         title: "Interview Ended",
         description:
@@ -531,7 +726,6 @@ export const Chat = ({ onInterviewEnd }: ChatProps) => {
         duration: 3000,
       });
 
-      // Set interview as ended (this will trigger the completion screen)
       setIsInterviewEnded(true);
     } catch (error) {
       console.error("Error ending interview:", error);
@@ -645,16 +839,27 @@ export const Chat = ({ onInterviewEnd }: ChatProps) => {
                         {liveTranscript || interimTranscript}
                       </div>
                       <div className="text-xs text-gray-500 dark:text-gray-400">
-                        {interimTranscript ? "Listening..." : "Sending..."}
+                        {interimTranscript ? "Listening..." : "Processing..."}
                       </div>
                     </div>
                   </motion.div>
                 )}
-                {/* Empty div to track the latest message */}
+
+                {/* Current question UI */}
+                {INTERVIEW_QUESTIONS[currentQuestionIndex] && (
+                  <QuestionContent
+                    question={INTERVIEW_QUESTIONS[currentQuestionIndex]}
+                    userName={userName}
+                    onAnswer={handleAnswer}
+                    showChoices={showChoices}
+                  />
+                )}
+
                 <div ref={messagesEndRef} />
               </AnimatePresence>
             </div>
           </ScrollArea>
+
           <div className="p-4 border-t dark:border-gray-700 bg-white dark:bg-gray-800">
             <div className="max-w-3xl mx-auto flex justify-center gap-4">
               <Button
@@ -681,3 +886,5 @@ export const Chat = ({ onInterviewEnd }: ChatProps) => {
     </div>
   );
 };
+
+export default Chat;
