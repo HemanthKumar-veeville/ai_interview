@@ -19,6 +19,7 @@ export const useVideoRecording = () => {
   const chunksRef = useRef<Blob[]>([]);
   const fileIdRef = useRef<string | null>(null);
   const chunkCountRef = useRef<number>(0);
+  const uploadedChunksRef = useRef<Set<number>>(new Set());
 
   const initializeInterviewer = useCallback(async () => {
     try {
@@ -52,6 +53,7 @@ export const useVideoRecording = () => {
     try {
       fileIdRef.current = uuidv4();
       chunkCountRef.current = 0;
+      uploadedChunksRef.current = new Set();
 
       // Initialize camera and interviewer streams
       setCameraStream(cameraStream);
@@ -142,6 +144,8 @@ export const useVideoRecording = () => {
       cameraStream?.getTracks().forEach((track) => track.stop());
       interviewerStream?.getTracks().forEach((track) => track.stop());
 
+      uploadedChunksRef.current.clear();
+
       setIsRecording(false);
       setStream(null);
       setScreenStream(null);
@@ -156,10 +160,15 @@ export const useVideoRecording = () => {
   }, [stream, screenStream, cameraStream, interviewerStream, toast]);
 
   const uploadChunk = async (chunk: Blob, chunkNumber: number) => {
+    let finalChunkNumber = chunkNumber;
+    while (uploadedChunksRef.current.has(finalChunkNumber)) {
+      finalChunkNumber++;
+    }
+
     const formData = new FormData();
-    formData.append("file", chunk, `chunk_${fileIdRef.current}_${chunkNumber}.webm`);
+    formData.append("file", chunk, `chunk_${fileIdRef.current}_${finalChunkNumber}.webm`);
     formData.append("fileId", fileIdRef.current!);
-    formData.append("chunkNumber", chunkNumber.toString());
+    formData.append("chunkNumber", finalChunkNumber.toString());
     formData.append("timestamp", Date.now().toString());
 
     try {
@@ -167,10 +176,11 @@ export const useVideoRecording = () => {
         headers: { "Content-Type": "multipart/form-data" },
         withCredentials: true,
       });
-      console.log(`Chunk ${chunkNumber} uploaded successfully:`, response.data);
+      console.log(`Chunk ${finalChunkNumber} uploaded successfully:`, response.data);
+      uploadedChunksRef.current.add(finalChunkNumber);
     } catch (error) {
-      console.error(`Chunk ${chunkNumber} upload failed:`, error);
-      await retryUpload(chunk, chunkNumber);
+      console.error(`Chunk ${finalChunkNumber} upload failed:`, error);
+      await retryUpload(chunk, finalChunkNumber);
     }
   };
 
