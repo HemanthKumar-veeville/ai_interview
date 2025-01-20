@@ -9,6 +9,8 @@ import { format } from "date-fns";
 import { Card, CardContent } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
+import apiClient from "@/lib/api-client";
+import { v4 as uuidv4 } from "uuid";
 
 interface ChatProps {
   onInterviewEnd: () => void;
@@ -150,6 +152,41 @@ const INTERVIEW_QUESTIONS = [
   },
 ];
 
+// Add this interface for the API payload
+interface ApplicantPayload {
+  instanceId: string;
+  name: string;
+  role: string;
+  careerGap: string;
+  experience: string;
+  resumeLink?: string;
+  coverLetterLink?: string;
+  conversations: Message[];
+}
+
+// Add this interface near the top of the file
+interface InterviewAnswers {
+  role?: "sde2" | "pm" | "others";
+  break?: "sixplus" | "lesssix";
+  experience?: "fiveplus" | "lessfive";
+  resume?: FileList;
+  coverletter?: FileList;
+  resumeLink?: string;
+  coverLetterLink?: string;
+  careerGap?: string;
+  experienceYears?: string;
+}
+
+// Add this interface for the document upload response
+interface DocumentUploadResponse {
+  success: boolean;
+  data: {
+    url: string;
+    key: string;
+    documentType: string;
+  };
+}
+
 const QuestionContent = ({
   question,
   userName,
@@ -184,8 +221,8 @@ const QuestionContent = ({
           type="file"
           ref={fileInputRef}
           className="hidden"
-          multiple
           onChange={(e) => e.target.files && onAnswer(e.target.files)}
+          accept=".pdf,.doc,.docx"
         />
         <Button
           onClick={() => fileInputRef.current?.click()}
@@ -250,8 +287,8 @@ const QuestionContent = ({
             type="file"
             ref={fileInputRef}
             className="hidden"
-            multiple
             onChange={(e) => e.target.files && onAnswer(e.target.files)}
+            accept=".pdf,.doc,.docx"
           />
           <Button
             onClick={() => fileInputRef.current?.click()}
@@ -281,10 +318,12 @@ export const Chat = ({ onInterviewEnd }: ChatProps) => {
   const [videoFeeds, setVideoFeeds] = useState<boolean>(true);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(0);
   const [userName, setUserName] = useState<string>("");
-  const [answers, setAnswers] = useState<Record<string, any>>({});
+  const [answers, setAnswers] = useState<InterviewAnswers>({});
   const [showChoices, setShowChoices] = useState(false);
   const [isValidationFailed, setIsValidationFailed] = useState(false);
   const [isCoverLetterUpload, setIsCoverLetterUpload] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [instanceId] = useState(() => uuidv4());
 
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -626,6 +665,94 @@ export const Chat = ({ onInterviewEnd }: ChatProps) => {
     }
   };
 
+  // Update the uploadDocument function
+  const uploadDocument = async (file: File, type: "resume" | "coverletter") => {
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("instanceId", instanceId);
+      formData.append("documentType", type);
+
+      const response = await apiClient.post<DocumentUploadResponse>(
+        "/documents/upload",
+        formData,
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        }
+      );
+
+      // Check for success and data.url in the response
+      if (response.data?.success && response.data?.data?.url) {
+        // Update answers with the file URL - using the correct key based on type
+        const linkKey = type === "resume" ? "resumeLink" : "coverLetterLink";
+
+        setAnswers((prev) => ({
+          ...prev,
+          [linkKey]: response.data.data.url,
+        }));
+
+        console.log(`Updated ${type} link:`, response.data.data.url); // Add logging
+        return response.data.data.url;
+      } else {
+        throw new Error("Invalid response format from server");
+      }
+    } catch (error) {
+      console.error(`Error uploading ${type}:`, error);
+      toast({
+        title: "Upload Failed",
+        description: `Failed to upload ${type}. Please try again.`,
+        variant: "destructive",
+      });
+      throw error;
+    }
+  };
+
+  // Move the API call logic to a separate function
+  const saveApplicantData = async () => {
+    try {
+      setIsSaving(true);
+
+      // Prepare the API payload
+      const applicantPayload: ApplicantPayload = {
+        instanceId,
+        name: userName.trim(),
+        role:
+          answers.role === "sde2"
+            ? "Software Development Engineer (SDE2)"
+            : answers.role === "pm"
+            ? "Product Manager"
+            : "",
+        careerGap: answers.careerGap || "notspecified",
+        experience: answers.experience || "notspecified",
+        resumeLink: answers.resumeLink || "",
+        coverLetterLink: answers.coverLetterLink || "",
+        conversations: messages,
+      };
+
+      console.log("Final payload:", applicantPayload);
+
+      // Make the API call
+      const response = await apiClient.post("/applicants", applicantPayload);
+
+      if (!response.data) {
+        throw new Error("Failed to save applicant data");
+      }
+    } catch (error) {
+      console.error("Error saving applicant data:", error);
+      toast({
+        title: "Error",
+        description: "Failed to save your application. Please try again.",
+        variant: "destructive",
+      });
+      throw error;
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Update the handleAnswer function
   const handleAnswer = async (answer: string | FileList) => {
     if (!answer || isSpeakingRef.current || isLoading) return;
 
@@ -637,111 +764,178 @@ export const Chat = ({ onInterviewEnd }: ChatProps) => {
     if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current);
     if (noSpeechTimeoutRef.current) clearTimeout(noSpeechTimeoutRef.current);
 
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      content:
-        typeof answer === "string"
-          ? answer
-          : `Uploaded ${answer.length} file(s)`,
-      role: "user",
-      timestamp: Date.now(),
-    };
-
-    setMessages((prev) => [...prev, userMessage]);
-    setLiveTranscript("");
-    setInterimTranscript("");
-
     try {
       const currentQuestion = INTERVIEW_QUESTIONS[currentQuestionIndex];
-      const validationResult = currentQuestion.validation?.(answer);
 
-      if (!validationResult?.valid) {
-        setIsValidationFailed(true);
-        const rejectionMessage =
-          typeof validationResult?.message === "function"
-            ? validationResult.message(userName)
-            : validationResult?.message;
+      // Handle file uploads for resume and cover letter
+      if (answer instanceof FileList && answer.length > 0) {
+        const file = answer[0];
+        const type = currentQuestion.id === "resume" ? "resume" : "coverletter";
 
-        const rejectionMsgObj: Message = {
+        // Upload the document and wait for the URL
+        await uploadDocument(file, type);
+
+        // Create message with upload confirmation
+        const userMessage: Message = {
           id: Date.now().toString(),
-          content: rejectionMessage,
-          role: "assistant",
+          content: `Uploaded ${file.name} successfully`,
+          role: "user",
           timestamp: Date.now(),
         };
 
-        setMessages((prev) => [...prev, rejectionMsgObj]);
-        await speak(rejectionMessage);
-        return;
-      }
+        setMessages((prev) => [...prev, userMessage]);
+        setLiveTranscript("");
+        setInterimTranscript("");
 
-      // Handle cover letter choice
-      if (currentQuestion.id === "coverletter") {
-        if (typeof answer === "string" && answer === "yes") {
-          setIsCoverLetterUpload(true);
-          const uploadMessage: Message = {
+        // If this was the cover letter upload, save applicant data before moving to final message
+        if (type === "coverletter") {
+          await saveApplicantData();
+        }
+
+        // Move to next question after successful upload
+        if (currentQuestionIndex < INTERVIEW_QUESTIONS.length - 1) {
+          const nextQuestion = INTERVIEW_QUESTIONS[currentQuestionIndex + 1];
+          const nextContent =
+            typeof nextQuestion.content === "function"
+              ? nextQuestion.content(userName)
+              : nextQuestion.content;
+
+          const nextMessage: Message = {
             id: Date.now().toString(),
-            content: "Please upload your cover letter.",
+            content: nextContent,
             role: "assistant",
             timestamp: Date.now(),
           };
-          setMessages((prev) => [...prev, uploadMessage]);
-          await speak(uploadMessage.content);
-          setShowChoices(true);
-          return;
-        } else if (answer instanceof FileList) {
-          // Reset cover letter upload mode after file is uploaded
-          setIsCoverLetterUpload(false);
+
+          setMessages((prev) => [...prev, nextMessage]);
+          setCurrentQuestionIndex((prev) => prev + 1);
+          await speak(nextContent);
         }
-      }
-
-      // Store answer
-      setAnswers((prev) => ({
-        ...prev,
-        [currentQuestion.id]: validationResult.value,
-      }));
-
-      // Update username if it's the first question
-      if (currentQuestionIndex === 0) {
-        setUserName(validationResult.value);
-      }
-
-      // Move to next question
-      if (currentQuestionIndex < INTERVIEW_QUESTIONS.length - 1) {
-        const nextQuestion = INTERVIEW_QUESTIONS[currentQuestionIndex + 1];
-        const nextContent =
-          typeof nextQuestion.content === "function"
-            ? nextQuestion.content(userName || validationResult.value)
-            : nextQuestion.content;
-
-        const nextMessage: Message = {
+      } else {
+        // Handle non-file answers
+        const userMessage: Message = {
           id: Date.now().toString(),
-          content: nextContent,
-          role: "assistant",
+          content: answer as string,
+          role: "user",
           timestamp: Date.now(),
         };
 
-        setMessages((prev) => [...prev, nextMessage]);
-        setCurrentQuestionIndex((prev) => prev + 1);
-        await speak(nextContent);
+        setMessages((prev) => [...prev, userMessage]);
+        setLiveTranscript("");
+        setInterimTranscript("");
 
-        // Only start recognition for text-type questions
-        if (nextQuestion.type === "text" && nextQuestion.id !== "name") {
-          setTimeout(() => {
-            if (!isSpeakingRef.current) {
-              startRecognition();
+        // Update state based on question type
+        switch (currentQuestion.id) {
+          case "welcome":
+            // Store name
+            setUserName(answer as string);
+            setAnswers((prev) => ({
+              ...prev,
+              name: answer as string,
+            }));
+            break;
+
+          case "role":
+            // Store role
+            setAnswers((prev) => ({
+              ...prev,
+              role: answer as string,
+            }));
+            break;
+
+          case "break":
+            // Store career gap
+            setAnswers((prev) => ({
+              ...prev,
+              careerGap: answer === "sixplus" ? "6+months" : "lessthan6months",
+            }));
+            break;
+
+          case "experience":
+            // Store experience
+            setAnswers((prev) => ({
+              ...prev,
+              experience: answer === "fiveplus" ? "5+years" : "lessthan5years",
+            }));
+            break;
+
+          case "coverletter":
+            if (answer === "yes") {
+              // Show upload UI
+              setIsCoverLetterUpload(true);
+              const uploadPrompt: Message = {
+                id: Date.now().toString(),
+                content: "Please upload your cover letter.",
+                role: "assistant",
+                timestamp: Date.now(),
+              };
+              setMessages((prev) => [...prev, uploadPrompt]);
+              await speak(uploadPrompt.content);
+              setShowChoices(true);
+              return;
+            } else {
+              // If user selected "no", save applicant data before moving to final message
+              setAnswers((prev) => ({
+                ...prev,
+                coverLetterLink: "",
+              }));
+              await saveApplicantData();
             }
-          }, 1000);
+            break;
         }
-      } else {
-        handleEndInterview();
+
+        // Handle validation and next question
+        const validationResult = currentQuestion.validation?.(answer as string);
+
+        if (!validationResult?.valid) {
+          setIsValidationFailed(true);
+          const rejectionMessage =
+            typeof validationResult?.message === "function"
+              ? validationResult.message(userName)
+              : validationResult?.message;
+
+          const rejectionMsgObj: Message = {
+            id: Date.now().toString(),
+            content: rejectionMessage,
+            role: "assistant",
+            timestamp: Date.now(),
+          };
+
+          setMessages((prev) => [...prev, rejectionMsgObj]);
+          await speak(rejectionMessage);
+          return;
+        }
+
+        // Move to next question if validation passed
+        if (currentQuestionIndex < INTERVIEW_QUESTIONS.length - 1) {
+          const nextQuestion = INTERVIEW_QUESTIONS[currentQuestionIndex + 1];
+          const nextContent =
+            typeof nextQuestion.content === "function"
+              ? nextQuestion.content(userName)
+              : nextQuestion.content;
+
+          const nextMessage: Message = {
+            id: Date.now().toString(),
+            content: nextContent,
+            role: "assistant",
+            timestamp: Date.now(),
+          };
+
+          setMessages((prev) => [...prev, nextMessage]);
+          setCurrentQuestionIndex((prev) => prev + 1);
+          await speak(nextContent);
+        }
       }
     } catch (error) {
-      console.error("Error processing answer:", error);
-      toast({
-        title: "Error",
-        description: "There was an error processing your response.",
-        variant: "destructive",
-      });
+      // Only show error toast if it's not a file upload error
+      if (!(error instanceof Error && error.message.includes("upload"))) {
+        console.error("Error processing answer:", error);
+        toast({
+          title: "Error",
+          description: "There was an error processing your response.",
+          variant: "destructive",
+        });
+      }
     } finally {
       setIsLoading(false);
     }
@@ -769,20 +963,20 @@ export const Chat = ({ onInterviewEnd }: ChatProps) => {
     }
   };
 
+  // Update handleEndInterview to remove the API call
   const handleEndInterview = async () => {
     try {
+      setIsSaving(true);
+
+      // Clear all states
+      clearAllStates();
+
+      // Continue with the existing end interview logic
       setVideoFeeds(false);
       onInterviewEnd();
       window.dispatchEvent(new CustomEvent("endInterview"));
       window.speechSynthesis.cancel();
       stopRecognition();
-
-      if (silenceTimeoutRef.current) {
-        clearTimeout(silenceTimeoutRef.current);
-      }
-      if (noSpeechTimeoutRef.current) {
-        clearTimeout(noSpeechTimeoutRef.current);
-      }
 
       if (stream) {
         stream.getTracks().forEach((track) => track.stop());
@@ -835,11 +1029,59 @@ export const Chat = ({ onInterviewEnd }: ChatProps) => {
       toast({
         title: "Error",
         description:
-          "There was an error ending the interview. Please close the tab.",
+          error instanceof Error
+            ? error.message
+            : "There was an error ending the interview. Please try again.",
         variant: "destructive",
       });
+    } finally {
+      setIsSaving(false);
     }
   };
+
+  // Add a function to clear all states
+  const clearAllStates = () => {
+    setMessages([]);
+    setIsLoading(false);
+    setIsListening(false);
+    setLiveTranscript("");
+    setInterimTranscript("");
+    setCountdown(6);
+    setIsTimerRunning(false);
+    setIsInterviewEnded(false);
+    setStream(null);
+    setVideoFeeds(false);
+    setCurrentQuestionIndex(0);
+    setUserName("");
+    setAnswers({});
+    setShowChoices(false);
+    setIsValidationFailed(false);
+    setIsCoverLetterUpload(false);
+    setIsSaving(false);
+
+    // Clear all timeouts
+    if (silenceTimeoutRef.current) {
+      clearTimeout(silenceTimeoutRef.current);
+      silenceTimeoutRef.current = null;
+    }
+    if (noSpeechTimeoutRef.current) {
+      clearTimeout(noSpeechTimeoutRef.current);
+      noSpeechTimeoutRef.current = null;
+    }
+
+    // Reset all refs
+    recognitionRef.current = null;
+    isRecognitionActive.current = false;
+    isSpeakingRef.current = false;
+    currentUtteranceRef.current = null;
+  };
+
+  // Add a cleanup effect when component unmounts
+  useEffect(() => {
+    return () => {
+      clearAllStates();
+    };
+  }, []);
 
   return (
     <div
@@ -991,8 +1233,9 @@ export const Chat = ({ onInterviewEnd }: ChatProps) => {
                 <Button
                   className="bg-red-600 hover:bg-red-700 text-white"
                   onClick={handleEndInterview}
+                  disabled={isSaving}
                 >
-                  End Interview
+                  {isSaving ? "Saving..." : "End Interview"}
                 </Button>
               </div>
             </div>

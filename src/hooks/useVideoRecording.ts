@@ -3,9 +3,10 @@ import { useToast } from "@/components/ui/use-toast";
 import axios from "axios";
 import { v4 as uuidv4 } from "uuid";
 const BASE_URL = import.meta.env.VITE_BASE_URL;
-import riya from "../assets/videos/riya.mp4";
+import talking from "../assets/videos/talking.mp4";
+import nodding from "../assets/videos/nodding.mp4";
 const CHUNK_DURATION = 10000; // 10 seconds in milliseconds
-const DEFAULT_INTERVIEWER_VIDEO_URL = riya;
+const DEFAULT_INTERVIEWER_VIDEO_URL = nodding;
 
 export const useVideoRecording = () => {
   const { toast } = useToast();
