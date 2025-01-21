@@ -31,18 +31,20 @@ const InterviewPage = ({
           backgroundPosition: "center",
           backgroundRepeat: "no-repeat",
         }}
-      />
+      >
+        <div className="absolute inset-0 bg-gradient-to-b from-blue-500/5 to-blue-600/10" />
+      </div>
 
       <div className="relative flex-1 z-10">
         <div
           className={`h-screen ${
             isInterviewEnded
               ? "flex justify-center items-center p-4"
-              : "grid grid-cols-[400px,1fr] gap-4 p-4"
+              : "grid grid-cols-[minmax(360px,_400px),1fr] gap-5 p-5"
           }`}
         >
           {!isInterviewEnded && (
-            <div className="relative h-full">
+            <div className="relative h-full flex items-center">
               <VideoRecorder
                 stream={stream}
                 screenStream={screenStream}
@@ -56,7 +58,7 @@ const InterviewPage = ({
               isInterviewEnded ? "w-full max-w-3xl" : ""
             }`}
           >
-            <div className="flex-1 bg-white/90 backdrop-blur-sm rounded-xl shadow-lg">
+            <div className="flex-1 bg-white/90 backdrop-blur-md rounded-2xl shadow-xl border border-white/20">
               <Chat onInterviewEnd={onInterviewEnd} instanceId={fileId} />
             </div>
           </div>

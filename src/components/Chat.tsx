@@ -1363,14 +1363,22 @@ export const Chat = ({ onInterviewEnd, instanceId }: ChatProps) => {
                     }`}
                   >
                     <div
-                      className={`max-w-[80%] rounded-2xl px-4 py-2 shadow-sm ${
+                      className={`max-w-[80%] rounded-2xl px-5 py-3 shadow-md ${
                         message.role === "user"
-                          ? "bg-primary text-primary-foreground ml-12"
-                          : "bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 mr-12"
+                          ? "bg-blue-600 text-white ml-12"
+                          : "bg-white/95 backdrop-blur-sm text-gray-800 mr-12 border border-white/20"
                       }`}
                     >
-                      <div className="break-words">{message.content}</div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                      <div className="break-words leading-relaxed">
+                        {message.content}
+                      </div>
+                      <div
+                        className={`text-xs mt-1 ${
+                          message.role === "user"
+                            ? "text-blue-100"
+                            : "text-gray-500"
+                        }`}
+                      >
                         {format(message.timestamp, "HH:mm")}
                       </div>
                     </div>
@@ -1412,36 +1420,48 @@ export const Chat = ({ onInterviewEnd, instanceId }: ChatProps) => {
             </div>
           </ScrollArea>
 
-          <div className="p-4 border-t dark:border-gray-700 bg-white dark:bg-gray-800">
+          <div className="p-4 border-t border-gray-200/20 bg-white/80 backdrop-blur-md">
             <div className="max-w-3xl mx-auto flex flex-col items-center gap-2">
-              <div className="flex justify-center gap-4">
+              <div className="flex justify-center items-center gap-4">
                 <div className="flex flex-col items-center">
-                  <Button
-                    className={`p-4 rounded-full ${
-                      isListening ? "bg-red-500" : "bg-primary"
-                    } text-white`}
-                    size="icon"
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    className={`p-3 rounded-full ${
+                      isListening
+                        ? "bg-red-500 shadow-md shadow-red-500/20"
+                        : "bg-blue-600 shadow-md shadow-blue-500/20"
+                    } text-white transition-all duration-200`}
                     onClick={() =>
                       isListening ? stopRecognition() : startRecognition()
                     }
                   >
-                    <Mic className="w-6 h-6" />
-                  </Button>
-                  <span className="text-xs mt-1 text-gray-600 dark:text-gray-400">
+                    <Mic className="w-4 h-4" />
+                  </motion.button>
+                  <span className="text-xs mt-1.5 text-gray-600 font-medium">
                     {isListening
                       ? "Listening..."
                       : isSpeakingRef.current
                       ? "Speaking..."
-                      : ""}
+                      : "Click to speak"}
                   </span>
                 </div>
-                <Button
-                  className="bg-red-600 hover:bg-red-700 text-white"
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm rounded-lg shadow-md shadow-red-500/20 transition-all duration-200 disabled:opacity-50"
                   onClick={handleEndInterview}
                   disabled={isSaving}
                 >
-                  {isSaving ? "Saving..." : "End Interview"}
-                </Button>
+                  {isSaving ? (
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      <span>Saving...</span>
+                    </div>
+                  ) : (
+                    "End Interview"
+                  )}
+                </motion.button>
               </div>
             </div>
           </div>
