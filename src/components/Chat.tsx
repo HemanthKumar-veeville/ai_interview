@@ -10,10 +10,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import apiClient from "@/lib/api-client";
-import { v4 as uuidv4 } from "uuid";
 
 interface ChatProps {
   onInterviewEnd: () => void;
+  instanceId: string;
 }
 
 // Enhanced interview questions with proper validation and UI options
@@ -144,12 +144,6 @@ const INTERVIEW_QUESTIONS = [
       };
     },
   },
-  {
-    id: "final",
-    content: (name: string) =>
-      `Thank you so much for your time today, ${name}! 🌟\n\nYou've shared some really impressive insights with us. Our team will carefully review your profile, and if you're shortlisted, we'll be in touch soon. We're excited about the possibility of having you join our Tesco family! ✨\n\nHave a wonderful day ahead! 😊`,
-    type: "end",
-  },
 ];
 
 // Add this interface for the API payload
@@ -175,6 +169,10 @@ interface InterviewAnswers {
   coverLetterLink?: string;
   careerGap?: string;
   experienceYears?: string;
+  documentAnalysis?: {
+    resume?: DocumentAnalysis;
+    coverletter?: DocumentAnalysis;
+  };
 }
 
 // Add this interface for the document upload response
@@ -184,6 +182,28 @@ interface DocumentUploadResponse {
     url: string;
     key: string;
     documentType: string;
+  };
+}
+
+// Add these interfaces near the top with other interfaces
+interface DocumentAnalysis {
+  success: boolean;
+  data: {
+    url: string;
+    key: string;
+    documentType: string;
+    analysis: string;
+    validation: string;
+    recommendedQuestions: {
+      technical: Array<{
+        question: string;
+        expectedAnswer: string;
+      }>;
+      behavioral: Array<{
+        question: string;
+        expectedAnswer: string;
+      }>;
+    };
   };
 }
 
@@ -304,7 +324,131 @@ const QuestionContent = ({
   }
 };
 
-export const Chat = ({ onInterviewEnd }: ChatProps) => {
+// First, add a new component to display document analysis results
+const DocumentAnalysisResults = ({
+  analysis,
+  onClose,
+}: {
+  analysis: DocumentAnalysis;
+  onClose: () => void;
+}) => {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+    >
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg max-w-2xl w-full max-h-[80vh] overflow-hidden">
+        <div className="p-6">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-xl font-semibold">Document Analysis Results</h3>
+            <Button variant="ghost" size="icon" onClick={onClose}>
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+          <div className="overflow-y-auto max-h-[60vh] space-y-4">
+            {/* Parse and display the analysis JSON */}
+            {analysis.data.analysis && (
+              <div className="space-y-6">
+                {Object.entries(JSON.parse(analysis.data.analysis)).map(
+                  ([key, value]) => (
+                    <div key={key} className="space-y-2">
+                      <h4 className="font-medium text-lg">{key}</h4>
+                      {Array.isArray(value) ? (
+                        <ul className="list-disc pl-5 space-y-2">
+                          {value.map((item, index) => (
+                            <li key={index}>{item}</li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-gray-600 dark:text-gray-300">
+                          {value as string}
+                        </p>
+                      )}
+                    </div>
+                  )
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+};
+
+// Update the DocumentAnalysisStatus component with a professional loader
+const DocumentAnalysisStatus = ({ isAnalyzing }: { isAnalyzing: boolean }) => {
+  if (!isAnalyzing) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="fixed bottom-4 right-4 bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg min-w-[300px]"
+    >
+      <div className="space-y-4">
+        <div className="flex items-center space-x-4">
+          <div className="relative">
+            <div className="w-8 h-8">
+              <div className="absolute top-0 left-0 w-full h-full">
+                <div className="w-8 h-8 border-4 border-primary/30 rounded-full" />
+                <div className="absolute top-0 left-0 w-8 h-8 border-4 border-primary rounded-full animate-spin border-t-transparent" />
+              </div>
+            </div>
+          </div>
+          <div>
+            <h3 className="font-medium text-sm">
+              Document Analysis in Progress
+            </h3>
+            <div className="flex items-center space-x-2 mt-1">
+              <motion.div
+                initial={{ width: 0 }}
+                animate={{ width: "100%" }}
+                transition={{ duration: 2, repeat: Infinity }}
+                className="h-1 bg-primary/20 rounded-full overflow-hidden"
+              >
+                <motion.div
+                  initial={{ x: "-100%" }}
+                  animate={{ x: "100%" }}
+                  transition={{
+                    duration: 1.5,
+                    repeat: Infinity,
+                    ease: "linear",
+                  }}
+                  className="h-full w-1/3 bg-primary rounded-full"
+                />
+              </motion.div>
+            </div>
+          </div>
+        </div>
+        <div className="text-xs text-gray-500 dark:text-gray-400">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={Math.random()} // Force re-render for animation
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.5 }}
+            >
+              {
+                [
+                  "Extracting document content...",
+                  "Analyzing professional experience...",
+                  "Evaluating skills and qualifications...",
+                  "Generating insights...",
+                ][Math.floor((Date.now() / 2000) % 4)]
+              }
+            </motion.div>
+          </AnimatePresence>
+        </div>
+      </div>
+    </motion.div>
+  );
+};
+
+export const Chat = ({ onInterviewEnd, instanceId }: ChatProps) => {
   const { toast } = useToast();
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -323,7 +467,17 @@ export const Chat = ({ onInterviewEnd }: ChatProps) => {
   const [isValidationFailed, setIsValidationFailed] = useState(false);
   const [isCoverLetterUpload, setIsCoverLetterUpload] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [instanceId] = useState(() => uuidv4());
+
+  // Add these new state variables
+  const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
+  const [documentUploadPromises, setDocumentUploadPromises] = useState<
+    Promise<any>[]
+  >([]);
+
+  // Add new state for showing analysis results
+  const [showAnalysisResults, setShowAnalysisResults] = useState(false);
+  const [currentAnalysis, setCurrentAnalysis] =
+    useState<DocumentAnalysis | null>(null);
 
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -665,7 +819,7 @@ export const Chat = ({ onInterviewEnd }: ChatProps) => {
     }
   };
 
-  // Update the uploadDocument function
+  // Modify the uploadDocument function to handle analysis completion
   const uploadDocument = async (file: File, type: "resume" | "coverletter") => {
     try {
       const formData = new FormData();
@@ -673,86 +827,113 @@ export const Chat = ({ onInterviewEnd }: ChatProps) => {
       formData.append("instanceId", instanceId);
       formData.append("documentType", type);
 
-      const response = await apiClient.post<DocumentUploadResponse>(
-        "/documents/upload",
-        formData,
-        {
+      setIsAnalyzing(true);
+
+      const uploadPromise = apiClient
+        .post<DocumentAnalysis>("/documents/upload", formData, {
           headers: {
             "Content-Type": "multipart/form-data",
           },
-        }
-      );
+        })
+        .then((response) => {
+          if (response.data?.success && response.data?.data?.url) {
+            setAnswers((prev) => ({
+              ...prev,
+              [type === "resume" ? "resumeLink" : "coverLetterLink"]:
+                response.data.data.url,
+              documentAnalysis: {
+                ...prev.documentAnalysis,
+                [type]: response.data,
+              },
+            }));
 
-      // Check for success and data.url in the response
-      if (response.data?.success && response.data?.data?.url) {
-        // Update answers with the file URL - using the correct key based on type
-        const linkKey = type === "resume" ? "resumeLink" : "coverLetterLink";
+            // Show analysis results when ready
+            setCurrentAnalysis(response.data);
+            setShowAnalysisResults(true);
+            setIsAnalyzing(false);
 
-        setAnswers((prev) => ({
-          ...prev,
-          [linkKey]: response.data.data.url,
-        }));
+            return response.data.data.url;
+          }
+          throw new Error("Invalid response format from server");
+        })
+        .catch((error) => {
+          console.error(`Error uploading ${type}:`, error);
+          setIsAnalyzing(false);
+          toast({
+            title: "Upload Warning",
+            description: `There was an issue with ${type} upload. Don't worry, you can continue with the interview.`,
+            variant: "default",
+          });
+        });
 
-        console.log(`Updated ${type} link:`, response.data.data.url); // Add logging
-        return response.data.data.url;
-      } else {
-        throw new Error("Invalid response format from server");
-      }
+      // Set a temporary URL immediately to continue the flow
+      setAnswers((prev) => ({
+        ...prev,
+        [type === "resume" ? "resumeLink" : "coverLetterLink"]: "pending",
+      }));
+
+      return "pending";
     } catch (error) {
-      console.error(`Error uploading ${type}:`, error);
+      setIsAnalyzing(false);
+      console.error(`Error initiating ${type} upload:`, error);
       toast({
-        title: "Upload Failed",
-        description: `Failed to upload ${type}. Please try again.`,
-        variant: "destructive",
+        title: "Upload Warning",
+        description: `There was an issue with ${type} upload. Don't worry, you can continue with the interview.`,
+        variant: "default",
       });
-      throw error;
+      return "pending";
     }
   };
 
-  // Move the API call logic to a separate function
   const saveApplicantData = async () => {
     try {
       setIsSaving(true);
 
-      // Prepare the API payload
-      const applicantPayload: ApplicantPayload = {
+      // Create the final applicant data object
+      const applicantData: ApplicantData = {
         instanceId,
-        name: userName.trim(),
-        role:
-          answers.role === "sde2"
-            ? "Software Development Engineer (SDE2)"
-            : answers.role === "pm"
-            ? "Product Manager"
-            : "",
-        careerGap: answers.careerGap || "notspecified",
-        experience: answers.experience || "notspecified",
-        resumeLink: answers.resumeLink || "",
-        coverLetterLink: answers.coverLetterLink || "",
-        conversations: messages,
+        name: userName,
+        role: answers.role,
+        careerGap: answers.careerGap,
+        experienceYears: answers.experience,
+        resumeLink: answers.resumeLink,
+        coverLetterLink: answers.coverLetterLink,
+        timestamp: Date.now(),
+        documentAnalysis: answers.documentAnalysis,
       };
 
-      console.log("Final payload:", applicantPayload);
+      // Make API call to save data
+      const response = await fetch("/applicants", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(applicantData),
+      });
 
-      // Make the API call
-      const response = await apiClient.post("/applicants", applicantPayload);
-
-      if (!response.data) {
+      if (!response.ok) {
         throw new Error("Failed to save applicant data");
       }
+
+      toast({
+        title: "Success",
+        description: "Your application has been saved successfully.",
+      });
     } catch (error) {
       console.error("Error saving applicant data:", error);
       toast({
-        title: "Error",
-        description: "Failed to save your application. Please try again.",
+        title: "Warning",
+        description:
+          "There was an issue saving your application, but you can continue.",
         variant: "destructive",
       });
-      throw error;
+      throw error; // Re-throw to handle in the calling function
     } finally {
       setIsSaving(false);
     }
   };
 
-  // Update the handleAnswer function
+  // Update the handleAnswer function to not await document upload
   const handleAnswer = async (answer: string | FileList) => {
     if (!answer || isSpeakingRef.current || isLoading) return;
 
@@ -772,13 +953,13 @@ export const Chat = ({ onInterviewEnd }: ChatProps) => {
         const file = answer[0];
         const type = currentQuestion.id === "resume" ? "resume" : "coverletter";
 
-        // Upload the document and wait for the URL
-        await uploadDocument(file, type);
+        // Initiate upload without waiting
+        uploadDocument(file, type);
 
-        // Create message with upload confirmation
+        // Create message with upload initiation
         const userMessage: Message = {
           id: Date.now().toString(),
-          content: `Uploaded ${file.name} successfully`,
+          content: `Uploading ${file.name}...`,
           role: "user",
           timestamp: Date.now(),
         };
@@ -787,12 +968,7 @@ export const Chat = ({ onInterviewEnd }: ChatProps) => {
         setLiveTranscript("");
         setInterimTranscript("");
 
-        // If this was the cover letter upload, save applicant data before moving to final message
-        if (type === "coverletter") {
-          await saveApplicantData();
-        }
-
-        // Move to next question after successful upload
+        // Move to next question immediately
         if (currentQuestionIndex < INTERVIEW_QUESTIONS.length - 1) {
           const nextQuestion = INTERVIEW_QUESTIONS[currentQuestionIndex + 1];
           const nextContent =
@@ -927,15 +1103,12 @@ export const Chat = ({ onInterviewEnd }: ChatProps) => {
         }
       }
     } catch (error) {
-      // Only show error toast if it's not a file upload error
-      if (!(error instanceof Error && error.message.includes("upload"))) {
-        console.error("Error processing answer:", error);
-        toast({
-          title: "Error",
-          description: "There was an error processing your response.",
-          variant: "destructive",
-        });
-      }
+      console.error("Error processing answer:", error);
+      toast({
+        title: "Error",
+        description: "There was an error processing your response.",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }
@@ -968,10 +1141,11 @@ export const Chat = ({ onInterviewEnd }: ChatProps) => {
     try {
       setIsSaving(true);
 
-      // Clear all states
-      clearAllStates();
+      // Check document analysis before ending
+      await checkDocumentAnalysis();
 
-      // Continue with the existing end interview logic
+      // Continue with existing end interview logic
+      clearAllStates();
       setVideoFeeds(false);
       onInterviewEnd();
       window.dispatchEvent(new CustomEvent("endInterview"));
@@ -1031,7 +1205,7 @@ export const Chat = ({ onInterviewEnd }: ChatProps) => {
         description:
           error instanceof Error
             ? error.message
-            : "There was an error ending the interview. Please try again.",
+            : "There was an error ending the interview.",
         variant: "destructive",
       });
     } finally {
@@ -1082,6 +1256,37 @@ export const Chat = ({ onInterviewEnd }: ChatProps) => {
       clearAllStates();
     };
   }, []);
+
+  const checkDocumentAnalysis = async () => {
+    try {
+      setIsAnalyzing(true);
+      // Wait for all document uploads with a timeout
+      await Promise.race([
+        Promise.all(documentUploadPromises),
+        new Promise((_, reject) =>
+          setTimeout(
+            () => reject(new Error("Document analysis timeout")),
+            10000
+          )
+        ),
+      ]);
+
+      if (
+        answers.documentAnalysis?.resume ||
+        answers.documentAnalysis?.coverletter
+      ) {
+        toast({
+          title: "Document Analysis Complete",
+          description: "Your documents have been analyzed successfully.",
+        });
+      }
+    } catch (error) {
+      console.error("Document analysis incomplete:", error);
+      // Don't show error toast, just log it
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
 
   return (
     <div
@@ -1240,6 +1445,22 @@ export const Chat = ({ onInterviewEnd }: ChatProps) => {
               </div>
             </div>
           </div>
+
+          {/* Show analysis status during processing */}
+          <DocumentAnalysisStatus isAnalyzing={isAnalyzing} />
+
+          {/* Show analysis results when available */}
+          <AnimatePresence>
+            {showAnalysisResults && currentAnalysis && (
+              <DocumentAnalysisResults
+                analysis={currentAnalysis}
+                onClose={() => {
+                  setShowAnalysisResults(false);
+                  setCurrentAnalysis(null);
+                }}
+              />
+            )}
+          </AnimatePresence>
         </>
       )}
     </div>

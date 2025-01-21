@@ -21,6 +21,7 @@ export const useVideoRecording = () => {
   const fileIdRef = useRef<string | null>(null);
   const chunkCountRef = useRef<number>(0);
   const uploadedChunksRef = useRef<Set<number>>(new Set());
+  const [fileId, setFileId] = useState<string>(uuidv4());
 
   const initializeInterviewer = useCallback(async () => {
     try {
@@ -52,7 +53,7 @@ export const useVideoRecording = () => {
 
   const startRecording = useCallback(async (cameraStream: MediaStream) => {
     try {
-      fileIdRef.current = uuidv4();
+      fileIdRef.current = fileId;
       chunkCountRef.current = 0;
       uploadedChunksRef.current = new Set();
 
@@ -133,7 +134,7 @@ export const useVideoRecording = () => {
       console.error(err);
       throw err;
     }
-  }, [toast, initializeInterviewer]);
+  }, [fileId, toast, initializeInterviewer]);
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && (stream || screenStream || cameraStream)) {
@@ -243,5 +244,6 @@ export const useVideoRecording = () => {
     error,
     startRecording,
     stopRecording,
+    fileId,
   };
 };
