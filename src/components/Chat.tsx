@@ -1474,17 +1474,11 @@ export const Chat = ({
       ]);
 
       if (answers.documentAnalysis?.resume) {
-        toast({
-          title: "Document Analysis Complete",
-          description: "Your documents have been analyzed successfully.",
-        });
-
         // Reset chat and start phase 2 with the resume analysis
         resetChatAndStartPhase2(answers.documentAnalysis.resume);
       }
     } catch (error) {
       console.error("Document analysis incomplete:", error);
-      // Don't show error toast, just log it
     } finally {
       setIsAnalyzing(false);
     }
@@ -1562,38 +1556,22 @@ export const Chat = ({
 
   // Add this function to handle Phase 2 interview start
   const startPhase2Interview = (analysis: DocumentAnalysis) => {
-    const welcomeMessage: Message = {
-      id: Date.now().toString(),
-      role: "assistant",
-      content: `Based on your profile analysis, I have some specific questions that will
-        help us better understand your experience. Would you like to proceed
-        with a brief technical and behavioral interview?`,
-      timestamp: Date.now(),
-    };
-
-    setMessages((prev) => [
-      ...prev,
-      welcomeMessage,
-      {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: "interview_consent",
-        timestamp: Date.now(),
-        isConsentRequest: true,
-      },
-    ]);
-    speak(welcomeMessage.content);
+    // Clear all states and messages
+    resetChatAndStartPhase2(analysis);
   };
 
-  // Add this function after checkDocumentAnalysis
+  // Update the resetChatAndStartPhase2 function
   const resetChatAndStartPhase2 = (analysis: DocumentAnalysis) => {
-    // Clear all messages and reset states
+    // Clear all states
     setMessages([]);
     setShowChoices(false);
     setIsValidationFailed(false);
     setIsCoverLetterUpload(false);
     setLiveTranscript("");
     setInterimTranscript("");
+    setCurrentQuestionIndex(0);
+    setIsLoading(false);
+    setIsListening(false);
 
     // Add the analysis summary message
     const summaryMessage: Message = {
