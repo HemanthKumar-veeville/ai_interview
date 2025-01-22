@@ -568,6 +568,9 @@ export const Chat = ({
   // Add state for mic status
   const [micState, setMicState] = useState<MicState>(MicState.READY);
 
+  // Add this near your other state declarations
+  const [closeCountdown, setCloseCountdown] = useState(5);
+
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
@@ -576,6 +579,20 @@ export const Chat = ({
   const noSpeechTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isSpeakingRef = useRef<boolean>(false);
   const currentUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+
+  // Update the useEffect for countdown and navigation
+  useEffect(() => {
+    if (isInterviewEnded && closeCountdown > 0) {
+      const timer = setInterval(() => {
+        setCloseCountdown((prev) => prev - 1);
+      }, 1000);
+
+      return () => clearInterval(timer);
+    } else if (isInterviewEnded && closeCountdown === 0) {
+      // Navigate to Tesco website instead of closing
+      window.location.href = "https://www.tesco.com/";
+    }
+  }, [isInterviewEnded, closeCountdown]);
 
   // Clean exit mechanism
   useEffect(() => {
@@ -1447,9 +1464,17 @@ export const Chat = ({
                   </li>
                 </ul>
               </div>
-              <p className="text-sm text-gray-500 dark:text-gray-500 mt-4">
-                You may now safely close this tab.
-              </p>
+              <div className="text-sm text-gray-500 dark:text-gray-500 mt-4">
+                <motion.div
+                  key={closeCountdown}
+                  initial={{ scale: 1.2, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  className="font-medium"
+                >
+                  This window will close in {closeCountdown} second
+                  {closeCountdown !== 1 ? "s" : ""}
+                </motion.div>
+              </div>
             </div>
           </motion.div>
         </div>

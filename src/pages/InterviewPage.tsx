@@ -1,6 +1,6 @@
 import { VideoRecorder } from "@/components/VideoRecorder";
 import { Chat } from "@/components/Chat";
-import { bg_03 } from "@/assets/images";
+import { bg_01, bg_03 } from "@/assets/images";
 import { useEffect, useState } from "react";
 
 interface InterviewPageProps {
@@ -26,9 +26,9 @@ const InterviewPage = ({
   const [isEnding, setIsEnding] = useState(false);
 
   useEffect(() => {
+    // Track screen sharing status
     if (screenStream) {
       setIsScreenShared(true);
-
       const videoTrack = screenStream.getVideoTracks()[0];
       if (videoTrack) {
         videoTrack.onended = () => {
@@ -39,15 +39,46 @@ const InterviewPage = ({
       setIsScreenShared(false);
     }
 
+    // Track all streams
+    const allStreams = [
+      { stream, name: "main" },
+      { stream: screenStream, name: "screen" },
+      { stream: cameraStream, name: "camera" },
+      { stream: interviewerStream, name: "interviewer" },
+    ];
+
+    // Set up track ended listeners for all streams
+    allStreams.forEach(({ stream, name }) => {
+      if (stream) {
+        stream.getTracks().forEach((track) => {
+          track.onended = () => {
+            console.log(`${name} ${track.kind} track ended`);
+            // You can add additional handling here if needed
+          };
+        });
+      }
+    });
+
+    // Cleanup function
     return () => {
+      // Clean up screen stream
       if (screenStream) {
         const videoTrack = screenStream.getVideoTracks()[0];
         if (videoTrack) {
           videoTrack.onended = null;
         }
       }
+
+      // Clean up all other streams
+      allStreams.forEach(({ stream }) => {
+        if (stream) {
+          stream.getTracks().forEach((track) => {
+            track.onended = null;
+          });
+        }
+      });
     };
-  }, [screenStream]);
+  }, [stream, screenStream, cameraStream, interviewerStream]);
 
   // Immediately stop all tracks and revoke permissions
   const stopAllTracksAndRevokePermissions = async () => {
@@ -156,7 +187,7 @@ const InterviewPage = ({
       <div
         className="w-full h-screen fixed inset-0 flex items-center justify-center bg-[#f5f5f5]"
         style={{
-          backgroundImage: `url(${bg_03})`,
+          backgroundImage: `url(${isInterviewEnded ? bg_01 : bg_03})`,
           backgroundSize: "100% 100%",
           backgroundPosition: "center",
           backgroundRepeat: "no-repeat",
