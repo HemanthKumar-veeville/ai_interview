@@ -10,6 +10,13 @@ const BASE_URL = import.meta.env.VITE_BASE_URL;
 
 type PageState = "error" | "consent" | "setup" | "interview";
 
+// Extend Window interface to include our custom property
+declare global {
+  interface Window {
+    isInterviewEnded?: boolean;
+  }
+}
+
 const checkHealth = async () => {
   try {
     const response = await axios.get(`${BASE_URL}/health`);
@@ -50,8 +57,34 @@ const Index = () => {
     }
   };
 
+  const cleanupMediaResources = () => {
+    // Only cleanup if we're actually recording
+    if (isRecording) {
+      stopRecording();
+    }
+
+    // Clean up all streams
+    [stream, screenStream, cameraStream, interviewerStream].forEach(
+      (mediaStream) => {
+        if (mediaStream) {
+          mediaStream.getTracks().forEach((track) => {
+            if (track.readyState === "live") {
+              track.stop();
+            }
+          });
+        }
+      }
+    );
+  };
+
   const handleInterviewEnd = () => {
+    // Set interview ended flag first
     window.isInterviewEnded = true;
+
+    // Clean up all media resources
+    cleanupMediaResources();
+
+    // Trigger UI update
     window.dispatchEvent(new Event("resize"));
   };
 
@@ -61,17 +94,18 @@ const Index = () => {
         event.preventDefault();
         event.returnValue =
           "Recording in progress. Are you sure you want to leave?";
+        return event.returnValue;
       }
+      return undefined;
     };
 
     window.addEventListener("beforeunload", handleBeforeUnload);
+
     return () => {
       window.removeEventListener("beforeunload", handleBeforeUnload);
-      if (isRecording) {
-        stopRecording();
-      }
-      if (stream) {
-        stream.getTracks().forEach((track) => track.stop());
+      // Only cleanup if the page is actually being unloaded
+      if (window.isInterviewEnded) {
+        cleanupMediaResources();
       }
     };
   }, [isRecording, stream, stopRecording]);

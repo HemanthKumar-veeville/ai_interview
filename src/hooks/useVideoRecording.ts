@@ -8,6 +8,13 @@ import nodding from "../assets/videos/nodding.mp4";
 const CHUNK_DURATION = 10000; // 10 seconds in milliseconds
 const DEFAULT_INTERVIEWER_VIDEO_URL = nodding;
 
+// Add this type declaration at the top of the file, after the imports
+declare global {
+  interface HTMLVideoElement {
+    captureStream(frameRate?: number): MediaStream;
+  }
+}
+
 export const useVideoRecording = () => {
   const { toast } = useToast();
   const [isRecording, setIsRecording] = useState<boolean>(false);

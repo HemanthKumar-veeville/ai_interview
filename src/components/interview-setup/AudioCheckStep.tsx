@@ -2,12 +2,23 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Volume2 } from "lucide-react";
 import { motion } from "framer-motion";
+import { Button } from "@/components/ui/button";
 
 interface AudioCheckStepProps {
   microphoneLevel: number;
+  isTestRecording?: boolean;
+  testAudioUrl?: string | null;
+  onStartTestRecording?: () => void;
+  onStopTestRecording?: () => void;
 }
 
-export const AudioCheckStep = ({ microphoneLevel }: AudioCheckStepProps) => (
+export const AudioCheckStep = ({
+  microphoneLevel,
+  isTestRecording = false,
+  testAudioUrl = null,
+  onStartTestRecording,
+  onStopTestRecording,
+}: AudioCheckStepProps) => (
   <Card className="border-none shadow-lg bg-white/80 backdrop-blur-sm">
     <CardContent className="space-y-6 p-6">
       <div className="space-y-2">
@@ -41,6 +52,30 @@ export const AudioCheckStep = ({ microphoneLevel }: AudioCheckStepProps) => (
             : "Please speak to test your microphone"}
         </p>
       </div>
+
+      {/* Test Recording Controls */}
+      {onStartTestRecording && onStopTestRecording && (
+        <div className="space-y-4">
+          <Button
+            onClick={
+              isTestRecording ? onStopTestRecording : onStartTestRecording
+            }
+            variant={isTestRecording ? "destructive" : "default"}
+            className="w-full"
+          >
+            {isTestRecording ? "Stop Test Recording" : "Start Test Recording"}
+          </Button>
+
+          {testAudioUrl && !isTestRecording && (
+            <audio
+              src={testAudioUrl}
+              controls
+              className="w-full"
+              style={{ height: "40px" }}
+            />
+          )}
+        </div>
+      )}
     </CardContent>
   </Card>
 );

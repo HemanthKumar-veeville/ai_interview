@@ -17,6 +17,7 @@ interface StepPageProps {
   descriptionClassName?: string;
   showPrevious?: boolean;
   nextButtonText?: string;
+  nextButtonDisabled?: boolean;
 }
 
 export const StepPage = ({
@@ -27,6 +28,7 @@ export const StepPage = ({
   onPrevious,
   showPrevious = true,
   nextButtonText = "Next",
+  nextButtonDisabled = false,
   className,
   titleClassName,
   descriptionClassName,
@@ -72,6 +74,7 @@ export const StepPage = ({
           <TooltipTrigger asChild>
             <Button
               onClick={onNext}
+              disabled={nextButtonDisabled}
               className="bg-primary hover:bg-primary/90 ml-auto"
             >
               {nextButtonText}

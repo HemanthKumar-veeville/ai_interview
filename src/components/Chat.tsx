@@ -4,16 +4,19 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/components/ui/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
-import { Mic, X, Check } from "lucide-react";
+import { Mic, X, Check, MicOff, Send } from "lucide-react";
 import { format } from "date-fns";
 import { Card, CardContent } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import apiClient from "@/lib/api-client";
+import axios from "axios";
+const BASE_URL = import.meta.env.VITE_BASE_URL;
 
 interface ChatProps {
   onInterviewEnd: () => void;
   instanceId: string;
+  isScreenShared: boolean;
 }
 
 // Enhanced interview questions with proper validation and UI options
@@ -205,6 +208,14 @@ interface DocumentAnalysis {
       }>;
     };
   };
+}
+
+// Update the MicState enum
+enum MicState {
+  READY = "ready", // Blue mic - ready to start (muted)
+  SPEAKING = "speaking", // Blue mic - assistant speaking (muted)
+  LISTENING = "listening", // Red mic - actively listening (unmuted)
+  PROCESSING = "processing", // Red mic - processing speech (muted)
 }
 
 const QuestionContent = ({
@@ -448,7 +459,82 @@ const DocumentAnalysisStatus = ({ isAnalyzing }: { isAnalyzing: boolean }) => {
   );
 };
 
-export const Chat = ({ onInterviewEnd, instanceId }: ChatProps) => {
+// Update the mic button UI component
+const MicButton = ({
+  state,
+  onClick,
+  disabled,
+}: {
+  state: MicState;
+  onClick: () => void;
+  disabled: boolean;
+}) => {
+  const getButtonStyle = () => {
+    switch (state) {
+      case MicState.READY:
+        return "bg-blue-600 shadow-md shadow-blue-500/20";
+      case MicState.SPEAKING:
+        return "bg-blue-600 shadow-md shadow-blue-500/20";
+      case MicState.LISTENING:
+        return "bg-red-500 shadow-md shadow-red-500/20 animate-pulse";
+      case MicState.PROCESSING:
+        return "bg-red-400 shadow-md shadow-red-400/20";
+    }
+  };
+
+  const getIcon = () => {
+    switch (state) {
+      case MicState.READY:
+        return <MicOff className="w-4 h-4" />;
+      case MicState.SPEAKING:
+        return <MicOff className="w-4 h-4" />;
+      case MicState.LISTENING:
+        return <Mic className="w-4 h-4" />;
+      case MicState.PROCESSING:
+        return <MicOff className="w-4 h-4" />;
+    }
+  };
+
+  const getStatusText = () => {
+    switch (state) {
+      case MicState.READY:
+        return "Click to speak";
+      case MicState.SPEAKING:
+        return "Speaking...";
+      case MicState.LISTENING:
+        return "Click to submit";
+      case MicState.PROCESSING:
+        return "Processing...";
+    }
+  };
+
+  return (
+    <div className="flex flex-col items-center">
+      <motion.button
+        whileHover={{ scale: 1.05 }}
+        whileTap={{ scale: 0.95 }}
+        className={`p-3 rounded-full transition-all duration-200 ${getButtonStyle()} text-white`}
+        onClick={onClick}
+        disabled={
+          disabled ||
+          state === MicState.SPEAKING ||
+          state === MicState.PROCESSING
+        }
+      >
+        {getIcon()}
+      </motion.button>
+      <span className="text-xs mt-1.5 text-gray-600 font-medium">
+        {getStatusText()}
+      </span>
+    </div>
+  );
+};
+
+export const Chat = ({
+  onInterviewEnd,
+  instanceId,
+  isScreenShared,
+}: ChatProps) => {
   const { toast } = useToast();
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -478,6 +564,9 @@ export const Chat = ({ onInterviewEnd, instanceId }: ChatProps) => {
   const [showAnalysisResults, setShowAnalysisResults] = useState(false);
   const [currentAnalysis, setCurrentAnalysis] =
     useState<DocumentAnalysis | null>(null);
+
+  // Add state for mic status
+  const [micState, setMicState] = useState<MicState>(MicState.READY);
 
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -517,8 +606,13 @@ export const Chat = ({ onInterviewEnd, instanceId }: ChatProps) => {
     };
   }, []);
 
-  // Countdown timer for interview start
+  // Update the timer display condition
   useEffect(() => {
+    // Only start timer if screen has been shared
+    if (!isScreenShared) {
+      return;
+    }
+
     const timer = setInterval(() => {
       setCountdown((prev) => {
         if (prev <= 1) {
@@ -532,7 +626,7 @@ export const Chat = ({ onInterviewEnd, instanceId }: ChatProps) => {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, []);
+  }, [isScreenShared]);
 
   // Initialize speech recognition
   useEffect(() => {
@@ -568,29 +662,22 @@ export const Chat = ({ onInterviewEnd, instanceId }: ChatProps) => {
 
       if (finalTranscript) {
         setLiveTranscript(finalTranscript);
-        if (silenceTimeoutRef.current) {
-          clearTimeout(silenceTimeoutRef.current);
-        }
-        silenceTimeoutRef.current = setTimeout(() => {
-          if (!isSpeakingRef.current) {
-            handleAnswer(finalTranscript);
-          }
-        }, 1500);
       }
       setInterimTranscript(interimTranscript);
     };
 
     recognitionRef.current.onerror = () => {
+      setMicState(MicState.READY);
       repeatLastQuestion();
     };
 
     recognitionRef.current.onend = () => {
       if (isRecognitionActive.current) {
         restartRecognition();
+      } else {
+        setMicState(MicState.READY);
       }
     };
-
-    startRecognition();
 
     return () => {
       stopRecognition();
@@ -701,6 +788,7 @@ export const Chat = ({ onInterviewEnd, instanceId }: ChatProps) => {
       recognitionRef.current.start();
       isRecognitionActive.current = true;
       setIsListening(true);
+      setMicState(MicState.LISTENING);
     }
   };
 
@@ -709,6 +797,7 @@ export const Chat = ({ onInterviewEnd, instanceId }: ChatProps) => {
       recognitionRef.current.stop();
       isRecognitionActive.current = false;
       setIsListening(false);
+      setMicState(MicState.PROCESSING);
     }
   };
 
@@ -733,17 +822,19 @@ export const Chat = ({ onInterviewEnd, instanceId }: ChatProps) => {
       window.speechSynthesis.cancel();
       stopRecognition();
       setShowChoices(false);
+      setMicState(MicState.SPEAKING);
 
       if (currentUtteranceRef.current) {
         currentUtteranceRef.current = null;
       }
 
-      // Remove emojis from text before speaking
+      // Improve emoji removal while keeping the text structure
       const textWithoutEmojis = text
         .replace(
           /[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu,
           ""
         )
+        .replace(/\s+/g, " ") // Remove extra spaces
         .trim();
 
       const utterance = new SpeechSynthesisUtterance(textWithoutEmojis);
@@ -762,7 +853,6 @@ export const Chat = ({ onInterviewEnd, instanceId }: ChatProps) => {
               voice.lang === "en-GB")
         ) ||
         voices.find(
-          // Fallback to any female English voice
           (voice) =>
             (voice.name.includes("Female") || !voice.name.includes("Male")) &&
             voice.lang.startsWith("en")
@@ -772,14 +862,15 @@ export const Chat = ({ onInterviewEnd, instanceId }: ChatProps) => {
         utterance.voice = preferredVoice;
       }
 
-      // Set speech properties for clarity
+      // Adjust speech properties for better clarity
       utterance.rate = 0.9; // Slightly slower speed
-      utterance.pitch = 1.1; // Slightly higher pitch for female voice
-      utterance.volume = 1.0; // Full volume
-      utterance.lang = "en-GB"; // British English
+      utterance.pitch = 1.1; // Slightly higher pitch
+      utterance.volume = 1.0;
+      utterance.lang = "en-GB";
 
       currentUtteranceRef.current = utterance;
 
+      // Implement keepAlive mechanism
       const keepAlive = () => {
         if (isSpeakingRef.current) {
           window.speechSynthesis.pause();
@@ -790,32 +881,50 @@ export const Chat = ({ onInterviewEnd, instanceId }: ChatProps) => {
 
       utterance.onstart = () => {
         isSpeakingRef.current = true;
-        stopRecognition();
-        keepAlive();
+        setMicState(MicState.SPEAKING);
+        keepAlive(); // Start the keepAlive mechanism
       };
 
       utterance.onend = () => {
         isSpeakingRef.current = false;
         currentUtteranceRef.current = null;
+        setMicState(MicState.READY);
         setShowChoices(true);
-
-        // Only start recognition for text-type questions
-        const currentQuestion = INTERVIEW_QUESTIONS[currentQuestionIndex];
-        if (currentQuestion?.type === "text" && currentQuestion.id !== "name") {
-          setTimeout(() => {
-            if (!isSpeakingRef.current) {
-              startRecognition();
-            }
-          }, 1000);
-        }
       };
 
       utterance.onerror = () => {
         isSpeakingRef.current = false;
         currentUtteranceRef.current = null;
+        setMicState(MicState.READY);
+        console.error("Speech synthesis error");
       };
 
-      window.speechSynthesis.speak(utterance);
+      // Split long text into chunks if necessary
+      if (textWithoutEmojis.length > 200) {
+        const chunks = textWithoutEmojis.match(/[^.!?]+[.!?]+/g) || [
+          textWithoutEmojis,
+        ];
+        chunks.forEach((chunk, index) => {
+          const chunkUtterance = new SpeechSynthesisUtterance(chunk.trim());
+          chunkUtterance.voice = utterance.voice;
+          chunkUtterance.rate = utterance.rate;
+          chunkUtterance.pitch = utterance.pitch;
+          chunkUtterance.volume = utterance.volume;
+          chunkUtterance.lang = utterance.lang;
+
+          // Only attach events to the last chunk
+          if (index === chunks.length - 1) {
+            chunkUtterance.onend = utterance.onend;
+            chunkUtterance.onerror = utterance.onerror;
+          }
+
+          setTimeout(() => {
+            window.speechSynthesis.speak(chunkUtterance);
+          }, index * 100);
+        });
+      } else {
+        window.speechSynthesis.speak(utterance);
+      }
     }
   };
 
@@ -903,13 +1012,16 @@ export const Chat = ({ onInterviewEnd, instanceId }: ChatProps) => {
       };
 
       // Make API call to save data
-      const response = await fetch("/applicants", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(applicantData),
-      });
+      const response = await axios.post(
+        `${BASE_URL}/applicants`,
+        applicantData,
+        {
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: applicantData,
+        }
+      );
 
       if (!response.ok) {
         throw new Error("Failed to save applicant data");
@@ -941,6 +1053,7 @@ export const Chat = ({ onInterviewEnd, instanceId }: ChatProps) => {
     stopRecognition();
     setShowChoices(false);
     setIsValidationFailed(false);
+    setMicState(MicState.READY); // Reset mic state after processing
 
     if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current);
     if (noSpeechTimeoutRef.current) clearTimeout(noSpeechTimeoutRef.current);
@@ -1135,36 +1248,35 @@ export const Chat = ({ onInterviewEnd, instanceId }: ChatProps) => {
       ]);
     }
   };
-
   // Update handleEndInterview to remove the API call
   const handleEndInterview = async () => {
     try {
       setIsSaving(true);
 
-      // Check document analysis before ending
-      await checkDocumentAnalysis();
-
-      // Continue with existing end interview logic
-      clearAllStates();
-      setVideoFeeds(false);
-      onInterviewEnd();
-      window.dispatchEvent(new CustomEvent("endInterview"));
+      // Stop speech synthesis and recognition first
       window.speechSynthesis.cancel();
       stopRecognition();
 
+      // Stop all media tracks (audio and video)
       if (stream) {
-        stream.getTracks().forEach((track) => track.stop());
+        stream.getTracks().forEach((track) => {
+          track.stop();
+        });
         setStream(null);
       }
 
-      // Stop any existing media tracks
-      const existingTracks = await navigator.mediaDevices
-        .getUserMedia({ audio: false, video: false })
-        .catch(() => null);
+      // Check document analysis before ending
+      await checkDocumentAnalysis();
 
-      if (existingTracks) {
-        existingTracks.getTracks().forEach((track) => track.stop());
-      }
+      // Clear all local states and resources
+      clearAllStates();
+
+      // Notify parent to handle media cleanup
+      onInterviewEnd();
+
+      // Update window state (keep this after onInterviewEnd)
+      window.isInterviewEnded = true;
+      window.dispatchEvent(new Event("resize"));
 
       const closingMessage: Message = {
         id: Date.now().toString(),
@@ -1173,27 +1285,11 @@ export const Chat = ({ onInterviewEnd, instanceId }: ChatProps) => {
         timestamp: Date.now(),
       };
 
-      const speakClosing = new Promise<void>((resolve) => {
-        const utterance = new SpeechSynthesisUtterance(closingMessage.content);
-        utterance.onend = () => {
-          window.speechSynthesis.cancel();
-          resolve();
-        };
-        window.speechSynthesis.speak(utterance);
-      });
-
       setMessages((prev) => [...prev, closingMessage]);
-      await speakClosing;
-
-      setLiveTranscript("");
-      setInterimTranscript("");
-      setIsListening(false);
-      setIsLoading(false);
 
       toast({
         title: "Interview Ended",
-        description:
-          "All recordings have been stopped and your session has ended.",
+        description: "Your session has been successfully completed.",
         duration: 3000,
       });
 
@@ -1203,9 +1299,7 @@ export const Chat = ({ onInterviewEnd, instanceId }: ChatProps) => {
       toast({
         title: "Error",
         description:
-          error instanceof Error
-            ? error.message
-            : "There was an error ending the interview.",
+          "There was an error ending the interview. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -1288,6 +1382,24 @@ export const Chat = ({ onInterviewEnd, instanceId }: ChatProps) => {
     }
   };
 
+  // Update the handleMicClick function
+  const handleMicClick = () => {
+    switch (micState) {
+      case MicState.READY:
+        if (!isSpeakingRef.current) {
+          startRecognition();
+        }
+        break;
+      case MicState.LISTENING:
+        stopRecognition();
+        if (liveTranscript) {
+          handleAnswer(liveTranscript);
+        }
+        break;
+      // No action needed for SPEAKING and PROCESSING states
+    }
+  };
+
   return (
     <div
       className={`flex flex-col ${
@@ -1340,6 +1452,17 @@ export const Chat = ({ onInterviewEnd, instanceId }: ChatProps) => {
               </p>
             </div>
           </motion.div>
+        </div>
+      ) : !isScreenShared ? (
+        <div className="flex items-center justify-center h-full">
+          <div className="text-center space-y-4">
+            <div className="text-2xl font-semibold text-gray-700">
+              Please share your screen to begin
+            </div>
+            <p className="text-gray-500">
+              The interview will start after screen sharing is enabled
+            </p>
+          </div>
         </div>
       ) : isTimerRunning ? (
         <div className="flex items-center justify-center h-full">
@@ -1423,29 +1546,11 @@ export const Chat = ({ onInterviewEnd, instanceId }: ChatProps) => {
           <div className="p-4 border-t border-gray-200/20 bg-white/80 backdrop-blur-md">
             <div className="max-w-3xl mx-auto flex flex-col items-center gap-2">
               <div className="flex justify-center items-center gap-4">
-                <div className="flex flex-col items-center">
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    className={`p-3 rounded-full ${
-                      isListening
-                        ? "bg-red-500 shadow-md shadow-red-500/20"
-                        : "bg-blue-600 shadow-md shadow-blue-500/20"
-                    } text-white transition-all duration-200`}
-                    onClick={() =>
-                      isListening ? stopRecognition() : startRecognition()
-                    }
-                  >
-                    <Mic className="w-4 h-4" />
-                  </motion.button>
-                  <span className="text-xs mt-1.5 text-gray-600 font-medium">
-                    {isListening
-                      ? "Listening..."
-                      : isSpeakingRef.current
-                      ? "Speaking..."
-                      : "Click to speak"}
-                  </span>
-                </div>
+                <MicButton
+                  state={micState}
+                  onClick={handleMicClick}
+                  disabled={isSaving}
+                />
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}

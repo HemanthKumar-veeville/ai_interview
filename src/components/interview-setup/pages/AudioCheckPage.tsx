@@ -6,12 +6,20 @@ interface AudioCheckPageProps {
   microphoneLevel: number;
   onNext: () => void;
   onPrevious: () => void;
+  isTestRecording?: boolean;
+  testAudioUrl?: string | null;
+  onStartTestRecording?: () => void;
+  onStopTestRecording?: () => void;
 }
 
 export const AudioCheckPage = ({
   microphoneLevel,
   onNext,
   onPrevious,
+  isTestRecording,
+  testAudioUrl,
+  onStartTestRecording,
+  onStopTestRecording,
 }: AudioCheckPageProps) => {
   return (
     <StepPage
@@ -24,7 +32,13 @@ export const AudioCheckPage = ({
       descriptionClassName="text-gray-600"
     >
       <div className="w-full max-w-xl mx-auto">
-        <AudioCheckStep microphoneLevel={microphoneLevel} />
+        <AudioCheckStep
+          microphoneLevel={microphoneLevel}
+          isTestRecording={isTestRecording}
+          testAudioUrl={testAudioUrl}
+          onStartTestRecording={onStartTestRecording}
+          onStopTestRecording={onStopTestRecording}
+        />
       </div>
     </StepPage>
   );

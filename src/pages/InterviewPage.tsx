@@ -1,6 +1,7 @@
 import { VideoRecorder } from "@/components/VideoRecorder";
 import { Chat } from "@/components/Chat";
 import { bg_03 } from "@/assets/images";
+import { useEffect, useState } from "react";
 
 interface InterviewPageProps {
   stream: MediaStream | null;
@@ -21,6 +22,135 @@ const InterviewPage = ({
   isInterviewEnded,
   onInterviewEnd,
 }: InterviewPageProps) => {
+  const [isScreenShared, setIsScreenShared] = useState(false);
+  const [isEnding, setIsEnding] = useState(false);
+
+  useEffect(() => {
+    if (screenStream) {
+      setIsScreenShared(true);
+
+      const videoTrack = screenStream.getVideoTracks()[0];
+      if (videoTrack) {
+        videoTrack.onended = () => {
+          setIsScreenShared(false);
+        };
+      }
+    } else {
+      setIsScreenShared(false);
+    }
+
+    return () => {
+      if (screenStream) {
+        const videoTrack = screenStream.getVideoTracks()[0];
+        if (videoTrack) {
+          videoTrack.onended = null;
+        }
+      }
+    };
+  }, [screenStream]);
+
+  // Immediately stop all tracks and revoke permissions
+  const stopAllTracksAndRevokePermissions = async () => {
+    try {
+      // Immediately disable and stop all tracks
+      const allStreams = [
+        stream,
+        screenStream,
+        cameraStream,
+        interviewerStream,
+      ];
+      allStreams.forEach((mediaStream) => {
+        if (mediaStream) {
+          mediaStream.getTracks().forEach((track) => {
+            track.enabled = false; // Immediately disable
+            track.stop();
+          });
+        }
+      });
+
+      // Clear all video elements immediately
+      document.querySelectorAll("video").forEach((video) => {
+        video.srcObject = null;
+        video.remove(); // Remove video elements entirely
+      });
+
+      // Force camera access revocation
+      if (navigator.mediaDevices) {
+        try {
+          const finalStream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: true,
+          });
+          finalStream.getTracks().forEach((track) => {
+            track.enabled = false;
+            track.stop();
+          });
+        } catch (err) {
+          console.log("Camera already stopped");
+        }
+      }
+    } catch (error) {
+      console.error("Error during cleanup:", error);
+    }
+  };
+
+  // Add a handler for the end interview button
+  const handleEndInterview = () => {
+    setIsEnding(true);
+
+    // Execute cleanup and call onInterviewEnd
+    stopAllTracksAndRevokePermissions().then(() => {
+      onInterviewEnd();
+    });
+  };
+
+  // Update cleanup effect
+  useEffect(() => {
+    if (isInterviewEnded || isEnding) {
+      const cleanupStreams = async () => {
+        // Immediately disable and stop all tracks
+        const allStreams = [
+          stream,
+          screenStream,
+          cameraStream,
+          interviewerStream,
+        ];
+        allStreams.forEach((mediaStream) => {
+          if (mediaStream) {
+            mediaStream.getTracks().forEach((track) => {
+              track.enabled = false; // Immediately disable
+              track.stop();
+            });
+          }
+        });
+
+        // Clear video elements
+        const videos = document.querySelectorAll("video");
+        videos.forEach((video) => {
+          video.srcObject = null;
+          video.remove(); // Remove video elements
+        });
+
+        // Additional cleanup...
+      };
+
+      cleanupStreams();
+    }
+
+    return () => {
+      if (isInterviewEnded || isEnding) {
+        stopAllTracksAndRevokePermissions();
+      }
+    };
+  }, [
+    isInterviewEnded,
+    isEnding,
+    stream,
+    screenStream,
+    cameraStream,
+    interviewerStream,
+  ]);
+
   return (
     <div className="min-h-screen flex flex-col">
       <div
@@ -59,7 +189,11 @@ const InterviewPage = ({
             }`}
           >
             <div className="flex-1 bg-white/90 backdrop-blur-md rounded-2xl shadow-xl border border-white/20">
-              <Chat onInterviewEnd={onInterviewEnd} instanceId={fileId} />
+              <Chat
+                onInterviewEnd={handleEndInterview}
+                instanceId={fileId}
+                isScreenShared={isScreenShared}
+              />
             </div>
           </div>
         </div>
