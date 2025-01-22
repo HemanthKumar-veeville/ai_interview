@@ -530,6 +530,77 @@ const MicButton = ({
   );
 };
 
+// Add this new component for displaying analysis summary in chat
+const DocumentAnalysisSummary = ({
+  analysis,
+}: {
+  analysis: DocumentAnalysis;
+}) => {
+  const parsedAnalysis = JSON.parse(analysis.data.analysis);
+  console.log({ parsedAnalysis });
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="bg-white/95 backdrop-blur-sm rounded-xl p-4 shadow-md border border-white/20"
+    >
+      {/* Summary Section */}
+      <div className="space-y-4">
+        <h3 className="text-lg font-semibold text-gray-800">
+          📋 Profile Summary
+        </h3>
+        <p className="text-gray-700 leading-relaxed">
+          {parsedAnalysis["Candidate Summary"]}
+        </p>
+      </div>
+      <div className="space-y-4">
+        <h3 className="text-lg font-semibold text-gray-800">
+          📋 Skills Summary
+        </h3>
+        <p className="text-gray-700 leading-relaxed">
+          {parsedAnalysis["Skills Assessment"]}
+        </p>
+      </div>
+      <div className="space-y-4">
+        <h3 className="text-lg font-semibold text-gray-800">
+          📋 Experience Summary
+        </h3>
+        <p className="text-gray-700 leading-relaxed">
+          {parsedAnalysis["Experience Validation"]}
+        </p>
+      </div>
+    </motion.div>
+  );
+};
+
+// Add this component for the interview consent message
+const InterviewConsentMessage = ({
+  onAnswer,
+}: {
+  onAnswer: (consent: boolean) => void;
+}) => {
+  return (
+    <div className="space-y-4">
+      <p className="text-gray-700 leading-relaxed">
+        Based on your profile analysis, I have some specific questions that will
+        help us better understand your experience. Would you like to proceed
+        with a brief technical and behavioral interview?
+      </p>
+      <div className="flex gap-3">
+        <Button
+          onClick={() => onAnswer(true)}
+          className="bg-blue-600 hover:bg-blue-700 text-white"
+        >
+          Yes, let's proceed
+        </Button>
+        <Button onClick={() => onAnswer(false)} variant="outline">
+          No, skip for now
+        </Button>
+      </div>
+    </div>
+  );
+};
+
 export const Chat = ({
   onInterviewEnd,
   instanceId,
@@ -580,6 +651,14 @@ export const Chat = ({
   const isSpeakingRef = useRef<boolean>(false);
   const currentUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
 
+  // Add this new state variable
+  const [interviewQuestions, setInterviewQuestions] = useState<
+    Array<{
+      question: string;
+      expectedAnswer: string;
+    }>
+  >([]);
+
   // Update the useEffect for countdown and navigation
   useEffect(() => {
     if (isInterviewEnded && closeCountdown > 0) {
@@ -590,7 +669,7 @@ export const Chat = ({
       return () => clearInterval(timer);
     } else if (isInterviewEnded && closeCountdown === 0) {
       // Navigate to Tesco website instead of closing
-      window.location.href = "https://www.tesco.com/";
+      window.location.href = "https://www.tesco-careers.com/";
     }
   }, [isInterviewEnded, closeCountdown]);
 
@@ -973,10 +1052,37 @@ export const Chat = ({
               },
             }));
 
-            // Show analysis results when ready
-            setCurrentAnalysis(response.data);
-            setShowAnalysisResults(true);
-            setIsAnalyzing(false);
+            // Add analysis results to chat
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: Date.now().toString(),
+                role: "assistant",
+                content: "I've analyzed your resume. Here's what I found:",
+                timestamp: Date.now(),
+              },
+              {
+                id: (Date.now() + 1).toString(),
+                role: "assistant",
+                content: JSON.stringify(response.data),
+                timestamp: Date.now(),
+                isAnalysis: true, // Add this flag to identify analysis messages
+              },
+            ]);
+
+            // After showing analysis, ask for interview consent
+            setTimeout(() => {
+              setMessages((prev) => [
+                ...prev,
+                {
+                  id: (Date.now() + 2).toString(),
+                  role: "assistant",
+                  content: "interview_consent",
+                  timestamp: Date.now(),
+                  isConsentRequest: true, // Add this flag for consent messages
+                },
+              ]);
+            }, 1000);
 
             return response.data.data.url;
           }
@@ -1417,6 +1523,42 @@ export const Chat = ({
     }
   };
 
+  // Add interview question handling
+  const handleInterviewConsent = (consent: boolean) => {
+    if (consent) {
+      // Start asking interview questions one by one
+      const analysis = answers.documentAnalysis?.resume;
+      console.log({ answers });
+      console.log({ analysis });
+      if (analysis) {
+        const questions = [
+          ...analysis.data.recommendedQuestions.technical,
+          ...analysis.data.recommendedQuestions.behavioral,
+        ];
+        setInterviewQuestions(questions);
+        askNextQuestion();
+      }
+    } else {
+      // End the interview process
+      handleEndInterview();
+    }
+  };
+
+  // Add this function to ask questions sequentially
+  const askNextQuestion = () => {
+    if (currentQuestionIndex < interviewQuestions.length) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now().toString(),
+          role: "assistant",
+          content: interviewQuestions[currentQuestionIndex].question,
+          timestamp: Date.now(),
+        },
+      ]);
+    }
+  };
+
   return (
     <div
       className={`flex flex-col ${
@@ -1517,18 +1659,30 @@ export const Chat = ({
                           : "bg-white/95 backdrop-blur-sm text-gray-800 mr-12 border border-white/20"
                       }`}
                     >
-                      <div className="break-words leading-relaxed">
-                        {message.content}
-                      </div>
-                      <div
-                        className={`text-xs mt-1 ${
-                          message.role === "user"
-                            ? "text-blue-100"
-                            : "text-gray-500"
-                        }`}
-                      >
-                        {format(message.timestamp, "HH:mm")}
-                      </div>
+                      {message.isAnalysis ? (
+                        <DocumentAnalysisSummary
+                          analysis={JSON.parse(message.content)}
+                        />
+                      ) : message.isConsentRequest ? (
+                        <InterviewConsentMessage
+                          onAnswer={handleInterviewConsent}
+                        />
+                      ) : (
+                        <>
+                          <div className="break-words leading-relaxed">
+                            {message.content}
+                          </div>
+                          <div
+                            className={`text-xs mt-1 ${
+                              message.role === "user"
+                                ? "text-blue-100"
+                                : "text-gray-500"
+                            }`}
+                          >
+                            {format(message.timestamp, "HH:mm")}
+                          </div>
+                        </>
+                      )}
                     </div>
                   </motion.div>
                 ))}
