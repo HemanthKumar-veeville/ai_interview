@@ -23,8 +23,7 @@ interface ChatProps {
 const INTERVIEW_QUESTIONS = [
   {
     id: "welcome",
-    content:
-      "🌟 Welcome to the Tesco Talent Gateway! 🌟\n\nHello! I'm TARA (Tesco's AI Recruitment Assistant). Let's get started with a few quick questions to ensure the best match for you. 💼\n\nFirst things first, what's your name? 😊",
+    content: "name? 😊",
     type: "text",
     validation: (answer: string) => {
       const name = answer.trim();
@@ -35,8 +34,7 @@ const INTERVIEW_QUESTIONS = [
   },
   {
     id: "role",
-    content: (name: string) =>
-      `Wonderful to meet you, ${name}! 😊 Your journey with Tesco could be just around the corner!\n\nTell me, ${name}, which of these exciting roles interests you the most?`,
+    content: (name: string) => `most?`,
     type: "choice",
     options: [
       { id: "sde2", label: "Software Development Engineer (SDE2) 👨‍💻" },
@@ -55,8 +53,7 @@ const INTERVIEW_QUESTIONS = [
   },
   {
     id: "break",
-    content: (name: string) =>
-      `Thanks for sharing that, ${name}! 😊\n\nWe believe that career breaks can bring valuable perspectives. Have you had a career break in the past? Please select the duration: 🌱`,
+    content: (name: string) => `Thanks🌱`,
     type: "choice",
     options: [
       {
@@ -80,8 +77,7 @@ const INTERVIEW_QUESTIONS = [
   },
   {
     id: "experience",
-    content: (name: string) =>
-      `You're doing great, ${name}! 🌟\n\nI'd love to hear about your professional journey. Please select your years of experience: 💼`,
+    content: (name: string) => `experience: 💼`,
     type: "choice",
     options: [
       {
@@ -105,8 +101,7 @@ const INTERVIEW_QUESTIONS = [
   },
   {
     id: "resume",
-    content: (name: string) =>
-      `Excellent, ${name}! You've got an impressive background! 🌟\n\nNow, let's take the next step together. Could you please share your latest Resume? 📄`,
+    content: (name: string) => `Resume? 📄`,
     type: "upload",
     validation: (files: FileList) => {
       return files.length > 0
@@ -120,8 +115,7 @@ const INTERVIEW_QUESTIONS = [
   },
   {
     id: "coverletter",
-    content: (name: string) =>
-      `Thank you for sharing your resume, ${name}! 📄\n\nWould you like to include a Cover Letter with your application? ✉️\nWhile optional, a personalized cover letter can help us better understand your motivation!`,
+    content: (name: string) => `motivation!`,
     type: "choice",
     options: [
       {
@@ -218,6 +212,12 @@ enum MicState {
   PROCESSING = "processing", // Red mic - processing speech (muted)
 }
 
+// Add a new interface for Phase 2 questions
+interface Phase2Question {
+  question: string;
+  expectedAnswer: string;
+}
+
 const QuestionContent = ({
   question,
   userName,
@@ -225,14 +225,19 @@ const QuestionContent = ({
   showChoices,
   isValidationFailed,
   isCoverLetterUpload,
+  isPhase2,
 }: {
-  question: (typeof INTERVIEW_QUESTIONS)[number];
+  question: (typeof INTERVIEW_QUESTIONS)[number] | Phase2Question;
   userName: string;
   onAnswer: (answer: string | FileList) => void;
   showChoices: boolean;
   isValidationFailed: boolean;
   isCoverLetterUpload: boolean;
+  isPhase2: boolean;
 }) => {
+  // If it's Phase 2, don't show any UI controls
+  if (isPhase2) return null;
+
   const [selectedOption, setSelectedOption] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -655,6 +660,10 @@ export const Chat = ({
       answer: string;
     }>
   >([]);
+
+  // Add new state for Phase 2
+  const [phase2Questions, setPhase2Questions] = useState<Phase2Question[]>([]);
+  const [phase2Index, setPhase2Index] = useState<number>(0);
 
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -1172,16 +1181,16 @@ export const Chat = ({
     }
   };
 
-  // Update the handleAnswer function for Phase 2
+  // Update the handleAnswer function
   const handleAnswer = async (answer: string | FileList) => {
     if (isInterviewPhase2) {
       if (!answer || isSpeakingRef.current || isLoading) return;
 
       setIsLoading(true);
       stopRecognition();
-      setMicState(MicState.READY); // Reset mic state after processing
+      setMicState(MicState.READY);
 
-      const currentQuestion = interviewQuestions[currentQuestionIndex];
+      const currentQuestion = phase2Questions[phase2Index];
 
       // Store conversation
       setInterviewConversations((prev) => [
@@ -1192,7 +1201,7 @@ export const Chat = ({
         },
       ]);
 
-      // Add user's answer to messages
+      // Add user's answer
       const userMessage: Message = {
         id: Date.now().toString(),
         role: "user",
@@ -1204,20 +1213,18 @@ export const Chat = ({
       setInterimTranscript("");
 
       // Move to next question
-      const nextIndex = currentQuestionIndex + 1;
-      if (nextIndex < interviewQuestions.length) {
-        const nextQuestion = interviewQuestions[nextIndex];
+      const nextIndex = phase2Index + 1;
+      if (nextIndex < phase2Questions.length) {
+        const nextQuestion = phase2Questions[nextIndex];
         const questionMessage: Message = {
           id: Date.now().toString(),
           role: "assistant",
           content: nextQuestion.question,
           timestamp: Date.now(),
         };
-
-        // Add next question to messages
         setMessages((prev) => [...prev, questionMessage]);
         speak(questionMessage.content);
-        setCurrentQuestionIndex(nextIndex);
+        setPhase2Index(nextIndex);
       } else {
         // Interview completed
         const completionMessage: Message = {
@@ -1599,22 +1606,21 @@ export const Chat = ({
   // Update the handleInterviewConsent function
   const handleInterviewConsent = (consent: boolean) => {
     if (consent) {
-      // Start first question immediately
-      const firstQuestion = interviewQuestions[0];
+      // Start Phase 2 with first question
+      const firstQuestion = phase2Questions[0];
       const questionMessage: Message = {
         id: Date.now().toString(),
         role: "assistant",
         content: firstQuestion.question,
         timestamp: Date.now(),
       };
-      setMessages([questionMessage]); // Reset messages to show only current question
+      setMessages([questionMessage]);
       speak(questionMessage.content);
-      setCurrentQuestionIndex(0);
     } else {
       const conclusionMessage: Message = {
         id: Date.now().toString(),
         role: "assistant",
-        content: `Thank you for your time. We appreciate your interest in Tesco. You can always come back later for the technical interview.`,
+        content: `Thank you for your time. We appreciate your interest in Tesco.`,
         timestamp: Date.now(),
       };
       setMessages([conclusionMessage]);
@@ -1631,7 +1637,7 @@ export const Chat = ({
 
   // Update the resetChatAndStartPhase2 function
   const resetChatAndStartPhase2 = (analysis: DocumentAnalysis) => {
-    // Clear all states
+    // Clear all Phase 1 states
     setMessages([]);
     setShowChoices(false);
     setIsValidationFailed(false);
@@ -1641,14 +1647,14 @@ export const Chat = ({
     setCurrentQuestionIndex(0);
     setInterviewConversations([]);
 
-    // Extract questions from analysis
-    const questions = [
-      ...analysis.data.recommendedQuestions.technical,
-      ...analysis.data.recommendedQuestions.behavioral,
-    ];
-    setInterviewQuestions(questions);
+    // Set Phase 2 questions
+    const technicalQuestions = analysis.data.recommendedQuestions.technical;
+    const behavioralQuestions = analysis.data.recommendedQuestions.behavioral;
+    setPhase2Questions([...technicalQuestions, ...behavioralQuestions]);
+    setPhase2Index(0);
+    setIsInterviewPhase2(true);
 
-    // Add the analysis summary message
+    // Add the analysis summary and consent messages
     const summaryMessage: Message = {
       id: Date.now().toString(),
       role: "assistant",
@@ -1657,7 +1663,6 @@ export const Chat = ({
       isAnalysis: true,
     };
 
-    // Add consent request message
     const consentRequestMessage: Message = {
       id: Date.now() + 1,
       role: "assistant",
@@ -1673,7 +1678,6 @@ export const Chat = ({
       isConsentRequest: true,
     };
 
-    // Set messages in sequence
     setMessages([summaryMessage, consentRequestMessage, consentMessage]);
     speak(consentRequestMessage.content);
   };
@@ -1833,6 +1837,7 @@ export const Chat = ({
                     showChoices={showChoices}
                     isValidationFailed={isValidationFailed}
                     isCoverLetterUpload={isCoverLetterUpload}
+                    isPhase2={false}
                   />
                 )}
 
