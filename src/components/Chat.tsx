@@ -24,7 +24,7 @@ const INTERVIEW_QUESTIONS = [
   {
     id: "welcome",
     content:
-      "🌟 Welcome to the Tesco Talent Gateway! 🌟\n\nHello! We're thrilled you're considering joining the Tesco family, where innovation and passion drive everything we do. Let's get started with a few quick questions to ensure the best match for you. 💼\n\nFirst things first, what's your name? 😊",
+      "🌟 Welcome to the Tesco Talent Gateway! 🌟\n\nHello! I'm TARA (Tesco's AI Recruitment Assistant). Let's get started with a few quick questions to ensure the best match for you. 💼\n\nFirst things first, what's your name? 😊",
     type: "text",
     validation: (answer: string) => {
       const name = answer.trim();
@@ -581,11 +581,6 @@ const InterviewConsentMessage = ({
 }) => {
   return (
     <div className="space-y-4">
-      <p className="text-gray-700 leading-relaxed">
-        Based on your profile analysis, I have some specific questions that will
-        help us better understand your experience. Would you like to proceed
-        with a brief technical and behavioral interview?
-      </p>
       <div className="flex gap-3">
         <Button
           onClick={() => onAnswer(true)}
@@ -1052,13 +1047,12 @@ export const Chat = ({
               },
             }));
 
-            // Add analysis results to chat
             setMessages((prev) => [
               ...prev,
               {
                 id: Date.now().toString(),
                 role: "assistant",
-                content: "I've analyzed your resume. Here's what I found:",
+                content: "I've analyzed your profile, and here's what I found:",
                 timestamp: Date.now(),
               },
               {
@@ -1070,22 +1064,10 @@ export const Chat = ({
               },
             ]);
 
-            // Set analyzing to false after successful analysis
             setIsAnalyzing(false);
 
-            // After showing analysis, ask for interview consent
-            setTimeout(() => {
-              setMessages((prev) => [
-                ...prev,
-                {
-                  id: (Date.now() + 2).toString(),
-                  role: "assistant",
-                  content: "interview_consent",
-                  timestamp: Date.now(),
-                  isConsentRequest: true,
-                },
-              ]);
-            }, 1000);
+            // Start next phase without explicitly mentioning it
+            setTimeout(() => startPhase2Interview(response.data), 1000);
 
             return response.data.data.url;
           }
@@ -1491,14 +1473,14 @@ export const Chat = ({
         ),
       ]);
 
-      if (
-        answers.documentAnalysis?.resume ||
-        answers.documentAnalysis?.coverletter
-      ) {
+      if (answers.documentAnalysis?.resume) {
         toast({
           title: "Document Analysis Complete",
           description: "Your documents have been analyzed successfully.",
         });
+
+        // Reset chat and start phase 2 with the resume analysis
+        resetChatAndStartPhase2(answers.documentAnalysis.resume);
       }
     } catch (error) {
       console.error("Document analysis incomplete:", error);
@@ -1529,21 +1511,37 @@ export const Chat = ({
   // Add interview question handling
   const handleInterviewConsent = (consent: boolean) => {
     if (consent) {
-      // Start asking interview questions one by one
       const analysis = answers.documentAnalysis?.resume;
-      console.log({ answers });
-      console.log({ analysis });
       if (analysis) {
         const questions = [
           ...analysis.data.recommendedQuestions.technical,
           ...analysis.data.recommendedQuestions.behavioral,
         ];
         setInterviewQuestions(questions);
-        askNextQuestion();
+
+        const startMessage: Message = {
+          id: Date.now().toString(),
+          role: "assistant",
+          content: "Great! Let's begin with the first question:",
+          timestamp: Date.now(),
+        };
+
+        setMessages((prev) => [...prev, startMessage]);
+        speak(startMessage.content);
+
+        setTimeout(() => askNextQuestion(), 1000);
       }
     } else {
-      // End the interview process
-      handleEndInterview();
+      const conclusionMessage: Message = {
+        id: Date.now().toString(),
+        role: "assistant",
+        content: `Thank you for your time, ${userName}. We appreciate your interest in Tesco.`,
+        timestamp: Date.now(),
+      };
+      setMessages((prev) => [...prev, conclusionMessage]);
+      speak(conclusionMessage.content);
+
+      setTimeout(() => handleEndInterview(), 5000);
     }
   };
 
@@ -1560,6 +1558,74 @@ export const Chat = ({
         },
       ]);
     }
+  };
+
+  // Add this function to handle Phase 2 interview start
+  const startPhase2Interview = (analysis: DocumentAnalysis) => {
+    const welcomeMessage: Message = {
+      id: Date.now().toString(),
+      role: "assistant",
+      content: `Based on your profile analysis, I have some specific questions that will
+        help us better understand your experience. Would you like to proceed
+        with a brief technical and behavioral interview?`,
+      timestamp: Date.now(),
+    };
+
+    setMessages((prev) => [
+      ...prev,
+      welcomeMessage,
+      {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        content: "interview_consent",
+        timestamp: Date.now(),
+        isConsentRequest: true,
+      },
+    ]);
+    speak(welcomeMessage.content);
+  };
+
+  // Add this function after checkDocumentAnalysis
+  const resetChatAndStartPhase2 = (analysis: DocumentAnalysis) => {
+    // Clear all messages and reset states
+    setMessages([]);
+    setShowChoices(false);
+    setIsValidationFailed(false);
+    setIsCoverLetterUpload(false);
+    setLiveTranscript("");
+    setInterimTranscript("");
+
+    // Add the analysis summary message
+    const summaryMessage: Message = {
+      id: Date.now().toString(),
+      role: "assistant",
+      content: JSON.stringify(analysis),
+      timestamp: Date.now(),
+      isAnalysis: true,
+    };
+
+    // Add welcome message for phase 2
+    const welcomeMessage: Message = {
+      id: (Date.now() + 1).toString(),
+      role: "assistant",
+      content: `Based on your profile analysis, I have some specific questions that will help us better understand your experience. Would you like to proceed with a brief technical and behavioral interview?`,
+      timestamp: Date.now(),
+    };
+
+    // Add consent request message
+    const consentMessage: Message = {
+      id: (Date.now() + 2).toString(),
+      role: "assistant",
+      content: "interview_consent",
+      timestamp: Date.now(),
+      isConsentRequest: true,
+    };
+
+    // Set all messages at once
+    setMessages([summaryMessage, welcomeMessage, consentMessage]);
+
+    // Speak the welcome message
+    speak(welcomeMessage.content);
   };
 
   return (

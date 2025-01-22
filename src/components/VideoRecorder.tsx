@@ -1,6 +1,7 @@
 import React, { useRef, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { motion } from "framer-motion";
+import { tara } from "@/assets/images"; // Make sure to add the interviewer image to your assets
 
 interface VideoRecorderProps {
   stream?: MediaStream | null;
@@ -16,23 +17,6 @@ export const VideoRecorder: React.FC<VideoRecorderProps> = ({
   interviewerStream,
 }) => {
   const cameraVideoRef = useRef<HTMLVideoElement>(null);
-  const interviewerVideoRef = useRef<HTMLVideoElement>(null);
-
-  useEffect(() => {
-    if (interviewerVideoRef.current && interviewerStream) {
-      interviewerVideoRef.current.srcObject = interviewerStream;
-
-      const playVideo = async () => {
-        try {
-          await interviewerVideoRef.current?.play();
-        } catch (err) {
-          console.error("Failed to play interviewer video:", err);
-        }
-      };
-
-      playVideo();
-    }
-  }, [interviewerStream]);
 
   useEffect(() => {
     if (cameraVideoRef.current && cameraStream) {
@@ -42,18 +26,16 @@ export const VideoRecorder: React.FC<VideoRecorderProps> = ({
 
   return (
     <div className="h-full flex flex-col justify-center space-y-5">
-      {/* Interviewer video (TARA) */}
+      {/* Interviewer photo (TARA) */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
       >
         <Card className="relative overflow-hidden rounded-2xl border border-white/20 shadow-xl bg-gradient-to-br from-gray-900/95 to-gray-800/95">
-          <video
-            ref={interviewerVideoRef}
-            autoPlay
-            playsInline
-            loop
+          <img
+            src={tara}
+            alt="TARA - AI Interviewer"
             className="w-full aspect-video object-cover"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
