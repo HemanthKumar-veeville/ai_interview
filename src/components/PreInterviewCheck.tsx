@@ -45,10 +45,25 @@ const checkDeviceSupport = async () => {
 
 const requestPermissions = async () => {
   try {
-    // First request only audio to ensure microphone permission
+    // Request permissions one at a time for better browser compatibility
+    // First request audio
     await navigator.mediaDevices.getUserMedia({ audio: true });
-    // Then request only video to ensure camera permission
+
+    // Then request video
     await navigator.mediaDevices.getUserMedia({ video: true });
+
+    // Check if screen capture is supported
+    if ("getDisplayMedia" in navigator.mediaDevices) {
+      // Don't actually request screen sharing here, just check support
+      return true;
+    } else if (
+      (navigator.mediaDevices as any).getUserMedia &&
+      (navigator as any).mediaDevices.supportedConstraints.mediaSource
+    ) {
+      // Fallback for older browsers
+      return true;
+    }
+
     return true;
   } catch (error) {
     throw new Error("Permission denied: " + error.message);
@@ -93,20 +108,31 @@ export const PreInterviewCheck: React.FC<PreInterviewCheckProps> = ({
         await requestPermissions();
         setPermissionsGranted(true);
 
-        const mediaStream = await navigator.mediaDevices.getUserMedia({
+        // Browser-specific constraints
+        const constraints = {
           video: {
             width: { ideal: 1280 },
             height: { ideal: 720 },
             facingMode: "user",
+            // Add Safari-specific constraints
+            ...(navigator.userAgent.includes("Safari") &&
+              !navigator.userAgent.includes("Chrome") && {
+                frameRate: { max: 30 },
+              }),
           },
           audio: {
             echoCancellation: true,
             noiseSuppression: true,
             autoGainControl: true,
-            sampleRate: 48000,
+            // Different sample rates for different browsers
+            sampleRate: navigator.userAgent.includes("Firefox") ? 44100 : 48000,
             channelCount: 2,
           },
-        });
+        };
+
+        const mediaStream = await navigator.mediaDevices.getUserMedia(
+          constraints
+        );
 
         setStream(mediaStream);
         await initializeVideoPreview(mediaStream);

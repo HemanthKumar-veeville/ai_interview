@@ -50,6 +50,33 @@ export const SystemCheckStep = ({ stream }: SystemCheckStepProps) => {
   const cameraStatus = getCameraStatus();
   const microphoneStatus = getMicrophoneStatus();
 
+  // Add browser compatibility check
+  const getBrowserCompatibility = () => {
+    const ua = navigator.userAgent;
+    const browserInfo = {
+      name: "",
+      isCompatible: true,
+      warning: "",
+    };
+
+    if (ua.includes("Chrome")) {
+      browserInfo.name = "Chrome";
+    } else if (ua.includes("Firefox")) {
+      browserInfo.name = "Firefox";
+    } else if (ua.includes("Safari") && !ua.includes("Chrome")) {
+      browserInfo.name = "Safari";
+      browserInfo.warning = "Some features may have limited support in Safari";
+    } else if (ua.includes("Edge")) {
+      browserInfo.name = "Edge";
+    } else {
+      browserInfo.name = "Other";
+      browserInfo.isCompatible = false;
+      browserInfo.warning = "Your browser may not support all features";
+    }
+
+    return browserInfo;
+  };
+
   return (
     <Card className="border-none shadow-lg bg-white/80 backdrop-blur-sm">
       <CardContent className="space-y-4 pt-6">
@@ -103,6 +130,29 @@ export const SystemCheckStep = ({ stream }: SystemCheckStepProps) => {
             <TooltipContent className="bg-white/90 backdrop-blur-sm border-blue-100">
               <p className="text-gray-700">
                 Screen sharing will be requested when you start the interview
+              </p>
+            </TooltipContent>
+          </Tooltip>
+        </div>
+
+        {/* Add browser compatibility check */}
+        <div className="flex items-center justify-between p-3 rounded-lg bg-blue-50/50 border border-blue-100/50 transition-colors hover:bg-blue-50/70">
+          <div className="flex items-center gap-3">
+            <Monitor className="w-5 h-5 text-blue-500" />
+            <span className="text-gray-700">Browser Compatibility</span>
+          </div>
+          <Tooltip>
+            <TooltipTrigger>
+              {getBrowserCompatibility().isCompatible ? (
+                <CheckCircle className="text-green-500 h-5 w-5" />
+              ) : (
+                <AlertCircle className="text-yellow-500 h-5 w-5" />
+              )}
+            </TooltipTrigger>
+            <TooltipContent className="bg-white/90 backdrop-blur-sm border-blue-100">
+              <p className="text-sm">
+                {getBrowserCompatibility().warning ||
+                  `Using ${getBrowserCompatibility().name} - Fully Compatible`}
               </p>
             </TooltipContent>
           </Tooltip>

@@ -68,52 +68,74 @@ export const useVideoRecording = () => {
       setCameraStream(cameraStream);
       await initializeInterviewer();
 
-      // Request screen sharing
-      const displayStream = await navigator.mediaDevices.getDisplayMedia({
-        video: true,
-        audio: true,
-      });
+      // Request screen sharing with browser-specific options
+      const displayMediaOptions = {
+        video: {
+          cursor: "always",
+          displaySurface: "browser",
+        },
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          sampleRate: 44100,
+        },
+        preferCurrentTab: true, // For Firefox
+        selfBrowserSurface: "include", // For Firefox
+        systemAudio: "include", // For Firefox
+      };
 
-      // Create an audio context to mix audio streams
+      let displayStream;
+      try {
+        // Try the standard way first
+        displayStream = await navigator.mediaDevices.getDisplayMedia(displayMediaOptions);
+      } catch (error) {
+        console.error("Standard screen sharing failed:", error);
+        // Fallback for older browsers
+        displayStream = await (navigator.mediaDevices as any).getUserMedia({
+          video: { mediaSource: "screen" },
+          audio: true,
+        });
+      }
+
+      // Create an audio context with browser compatibility
+      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
       const audioContext = new AudioContext();
       const destination = audioContext.createMediaStreamDestination();
 
-      // Add system audio (AI speech from screen capture)
+      // Add system audio
       if (displayStream.getAudioTracks().length > 0) {
         const systemSource = audioContext.createMediaStreamSource(displayStream);
         systemSource.connect(destination);
       }
 
-      // Add microphone audio (applicant's voice)
+      // Add microphone audio with gain control
       if (cameraStream.getAudioTracks().length > 0) {
         const micSource = audioContext.createMediaStreamSource(cameraStream);
         const gainNode = audioContext.createGain();
-        gainNode.gain.value = 1.0; // Adjust microphone volume if needed
+        gainNode.gain.value = 1.0;
         micSource.connect(gainNode);
         gainNode.connect(destination);
       }
 
-      // Combine all video and audio tracks
+      // Combine all tracks
       const combinedTracks = [
         ...displayStream.getVideoTracks(),
         ...destination.stream.getAudioTracks(),
-        ...cameraStream.getAudioTracks() // Include the original microphone track
+        ...cameraStream.getAudioTracks(),
       ];
 
       const combinedStream = new MediaStream(combinedTracks);
-
       setStream(combinedStream);
       setScreenStream(displayStream);
 
-      // Initialize MediaRecorder with combined stream
+      // Initialize MediaRecorder with browser-specific options
       const options = {
-        mimeType: 'video/webm;codecs=vp8,opus',
+        mimeType: getSupportedMimeType(),
         audioBitsPerSecond: 128000,
-        videoBitsPerSecond: 2500000
+        videoBitsPerSecond: 2500000,
       };
 
       mediaRecorderRef.current = new MediaRecorder(combinedStream, options);
-
       chunksRef.current = [];
 
       mediaRecorderRef.current.ondataavailable = async (event: BlobEvent) => {
@@ -253,4 +275,23 @@ export const useVideoRecording = () => {
     stopRecording,
     fileId,
   };
+};
+
+// Add this helper function to check supported MIME types
+const getSupportedMimeType = () => {
+  const types = [
+    'video/webm;codecs=vp8,opus',
+    'video/webm;codecs=vp9,opus',
+    'video/webm;codecs=h264,opus',
+    'video/mp4;codecs=h264,aac',
+    'video/webm',
+  ];
+
+  for (const type of types) {
+    if (MediaRecorder.isTypeSupported(type)) {
+      return type;
+    }
+  }
+  
+  return ''; // Let the browser choose the default
 };

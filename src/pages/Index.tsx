@@ -32,6 +32,7 @@ const Index = () => {
   const [currentPage, setCurrentPage] = useState<PageState>("consent");
   const [showConsent, setShowConsent] = useState<boolean>(true);
   const [isHealthy, setIsHealthy] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
   const {
     startRecording,
@@ -112,6 +113,7 @@ const Index = () => {
 
   useEffect(() => {
     const performHealthCheck = async () => {
+      setIsLoading(true);
       try {
         await checkHealth();
         setIsHealthy(true);
@@ -119,21 +121,36 @@ const Index = () => {
         setIsHealthy(false);
         setCurrentPage("error");
         console.error("Service is not healthy:", error);
+      } finally {
+        setIsLoading(false);
       }
     };
 
     performHealthCheck();
   }, []);
 
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
+        <div className="h-screen flex items-center justify-center">
+          <div className="text-center space-y-4">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+            <p className="text-gray-600 dark:text-gray-300">Loading...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!isHealthy) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
         <div className="h-screen flex items-center justify-center">
           <div className="text-center space-y-4">
-            <h2 className="text-2xl font-bold text-red-600">
+            <h2 className="text-2xl font-bold text-red-600 dark:text-red-400">
               Service Unavailable
             </h2>
-            <p className="text-gray-600">
+            <p className="text-gray-600 dark:text-gray-300">
               Please try again later or contact support.
             </p>
           </div>
