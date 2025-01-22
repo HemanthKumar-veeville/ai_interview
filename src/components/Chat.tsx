@@ -36,7 +36,7 @@ const INTERVIEW_QUESTIONS = [
   {
     id: "role",
     content: (name: string) =>
-      `Wonderful to meet you, ${name}! 😊 Your journey with Tesco could be just around the corner!\n\nPlease tell me which role interests you the most?`,
+      `Wonderful to meet you, ${name}! 😊 Your journey with Tesco could be just around the corner!\n\nPlease choose the role that interests you the most?`,
     type: "choice",
     options: [
       { id: "sde2", label: "Software Development Engineer (SDE2) 👨‍💻" },
