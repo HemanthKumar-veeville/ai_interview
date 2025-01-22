@@ -1158,8 +1158,8 @@ export const Chat = ({
           body: applicantData,
         }
       );
-
-      if (!response.ok) {
+      console.log("response", response);
+      if (!response.data.success) {
         throw new Error("Failed to save applicant data");
       }
 
@@ -1463,7 +1463,7 @@ export const Chat = ({
       }
 
       // Check document analysis before ending
-      await checkDocumentAnalysis();
+      // await checkDocumentAnalysis();
 
       // Clear all local states and resources
       clearAllStates();
