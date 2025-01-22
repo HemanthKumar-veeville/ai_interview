@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/components/ui/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
-import { Mic, X, Check, MicOff, Send } from "lucide-react";
+import { Mic, X, Check, MicOff, Send, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { Card, CardContent } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -23,7 +23,8 @@ interface ChatProps {
 const INTERVIEW_QUESTIONS = [
   {
     id: "welcome",
-    content: "name? 😊",
+    content:
+      "🌟 Welcome to the Tesco Talent Gateway! 🌟\n\nHello! I'm TARA (Tesco's AI Recruitment Assistant). Let's get started with a few quick questions to ensure the best match for you. 💼\n\nFirst things first, tell me your first name in 1 word",
     type: "text",
     validation: (answer: string) => {
       const name = answer.trim();
@@ -34,7 +35,8 @@ const INTERVIEW_QUESTIONS = [
   },
   {
     id: "role",
-    content: (name: string) => `most?`,
+    content: (name: string) =>
+      `Wonderful to meet you, ${name}! 😊 Your journey with Tesco could be just around the corner!\n\nPlease tell me which role interests you the most?`,
     type: "choice",
     options: [
       { id: "sde2", label: "Software Development Engineer (SDE2) 👨‍💻" },
@@ -53,7 +55,8 @@ const INTERVIEW_QUESTIONS = [
   },
   {
     id: "break",
-    content: (name: string) => `Thanks🌱`,
+    content: (name: string) =>
+      `Thanks for sharing that, ${name}! 😊\n\nWe believe that career breaks can bring valuable perspectives. Have you had a career break in the past? Please select the duration: 🌱`,
     type: "choice",
     options: [
       {
@@ -77,7 +80,8 @@ const INTERVIEW_QUESTIONS = [
   },
   {
     id: "experience",
-    content: (name: string) => `experience: 💼`,
+    content: (name: string) =>
+      `You're doing great, ${name}! 🌟\n\nI'd love to hear about your professional journey. Please select your years of experience: 💼`,
     type: "choice",
     options: [
       {
@@ -101,7 +105,8 @@ const INTERVIEW_QUESTIONS = [
   },
   {
     id: "resume",
-    content: (name: string) => `Resume? 📄`,
+    content: (name: string) =>
+      `Excellent, ${name}! You've got an impressive background! 🌟\n\nNow, let's take the next step together. Could you please share your latest Resume? 📄`,
     type: "upload",
     validation: (files: FileList) => {
       return files.length > 0
@@ -115,16 +120,17 @@ const INTERVIEW_QUESTIONS = [
   },
   {
     id: "coverletter",
-    content: (name: string) => `motivation!`,
+    content: (name: string) =>
+      `Thank you for sharing your resume, ${name}! 📄\n\nWould you like to include a Cover Letter with your application? ✉\nWhile optional, a personalized cover letter can help us better understand your motivation!`,
     type: "choice",
     options: [
       {
         id: "yes",
-        label: "Yes, I'll upload a cover letter ✉️",
+        label: "Yes, I'll upload a cover letter ✉",
       },
       {
         id: "no",
-        label: "No, proceed without cover letter ➡️",
+        label: "No, proceed without cover letter ➡",
       },
     ],
     validation: (answer: string) => {
@@ -947,13 +953,14 @@ export const Chat = ({
         currentUtteranceRef.current = null;
       }
 
-      // Improve emoji removal while keeping the text structure
+      // Improve emoji removal while preserving text structure
       const textWithoutEmojis = text
         .replace(
           /[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu,
           ""
-        )
-        .replace(/\s+/g, " ") // Remove extra spaces
+        ) // Remove emojis
+        .replace(/\s+/g, " ") // Normalize spaces
+        .replace(/\n+/g, ". ") // Convert newlines to periods for better speech flow
         .trim();
 
       const utterance = new SpeechSynthesisUtterance(textWithoutEmojis);
@@ -1018,32 +1025,8 @@ export const Chat = ({
         console.error("Speech synthesis error");
       };
 
-      // Split long text into chunks if necessary
-      if (textWithoutEmojis.length > 200) {
-        const chunks = textWithoutEmojis.match(/[^.!?]+[.!?]+/g) || [
-          textWithoutEmojis,
-        ];
-        chunks.forEach((chunk, index) => {
-          const chunkUtterance = new SpeechSynthesisUtterance(chunk.trim());
-          chunkUtterance.voice = utterance.voice;
-          chunkUtterance.rate = utterance.rate;
-          chunkUtterance.pitch = utterance.pitch;
-          chunkUtterance.volume = utterance.volume;
-          chunkUtterance.lang = utterance.lang;
-
-          // Only attach events to the last chunk
-          if (index === chunks.length - 1) {
-            chunkUtterance.onend = utterance.onend;
-            chunkUtterance.onerror = utterance.onerror;
-          }
-
-          setTimeout(() => {
-            window.speechSynthesis.speak(chunkUtterance);
-          }, index * 100);
-        });
-      } else {
-        window.speechSynthesis.speak(utterance);
-      }
+      // Speak the entire text as one utterance instead of chunking
+      window.speechSynthesis.speak(utterance);
     }
   };
 
@@ -1849,11 +1832,13 @@ export const Chat = ({
           <div className="p-4 border-t border-gray-200/20 bg-white/80 backdrop-blur-md">
             <div className="max-w-3xl mx-auto flex flex-col items-center gap-2">
               <div className="flex justify-center items-center gap-4">
-                <MicButton
-                  state={micState}
-                  onClick={handleMicClick}
-                  disabled={isSaving}
-                />
+                {!interimTranscript && (
+                  <MicButton
+                    state={micState}
+                    onClick={handleMicClick}
+                    disabled={isSaving}
+                  />
+                )}
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
