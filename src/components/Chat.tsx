@@ -648,6 +648,14 @@ export const Chat = ({
     }>
   >([]);
 
+  // Add new state for storing interview conversations
+  const [interviewConversations, setInterviewConversations] = useState<
+    Array<{
+      question: string;
+      answer: string;
+    }>
+  >([]);
+
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
@@ -1159,29 +1167,29 @@ export const Chat = ({
   // Update the handleAnswer function
   const handleAnswer = async (answer: string | FileList) => {
     if (isInterviewPhase2) {
-      // Handle Phase 2 interview answers
       const currentQuestion = interviewQuestions[currentQuestionIndex];
 
-      // Store user's answer
-      const userMessage: Message = {
-        id: Date.now().toString(),
-        role: "user",
-        content: answer as string,
-        timestamp: Date.now(),
-      };
-      setMessages((prev) => [...prev, userMessage]);
+      // Store conversation
+      setInterviewConversations((prev) => [
+        ...prev,
+        {
+          question: currentQuestion.question,
+          answer: answer as string,
+        },
+      ]);
 
-      // Move to next question
+      // Move to next question immediately
       const nextIndex = currentQuestionIndex + 1;
       if (nextIndex < interviewQuestions.length) {
-        // Ask next question
-        const nextQuestion: Message = {
-          id: (Date.now() + 1).toString(),
+        const nextQuestion = interviewQuestions[nextIndex];
+        const questionMessage: Message = {
+          id: Date.now().toString(),
           role: "assistant",
-          content: interviewQuestions[nextIndex].question,
+          content: nextQuestion.question,
           timestamp: Date.now(),
         };
-        setMessages((prev) => [...prev, nextQuestion]);
+        // Show only the next question
+        setMessages([questionMessage]);
         speak(nextQuestion.content);
         setCurrentQuestionIndex(nextIndex);
       } else {
@@ -1193,8 +1201,12 @@ export const Chat = ({
             "Thank you for completing the interview. We'll review your responses and get back to you soon.",
           timestamp: Date.now(),
         };
-        setMessages((prev) => [...prev, completionMessage]);
+        setMessages([completionMessage]);
         speak(completionMessage.content);
+
+        // Log all conversations
+        console.log("Interview Conversations:", interviewConversations);
+
         setTimeout(() => handleEndInterview(), 5000);
       }
       return;
@@ -1508,7 +1520,6 @@ export const Chat = ({
   const checkDocumentAnalysis = async () => {
     try {
       setIsAnalyzing(true);
-      // Wait for all document uploads with a timeout
       await Promise.race([
         Promise.all(documentUploadPromises),
         new Promise((_, reject) =>
@@ -1520,11 +1531,16 @@ export const Chat = ({
       ]);
 
       if (answers.documentAnalysis?.resume) {
-        // Reset chat and start phase 2 with the resume analysis
-        resetChatAndStartPhase2(answers.documentAnalysis.resume);
+        // Start Phase 2 with the resume analysis
+        startPhase2Interview(answers.documentAnalysis.resume);
       }
     } catch (error) {
       console.error("Document analysis incomplete:", error);
+      toast({
+        title: "Analysis Error",
+        description: "Failed to analyze documents. Please try again.",
+        variant: "destructive",
+      });
     } finally {
       setIsAnalyzing(false);
     }
@@ -1551,26 +1567,34 @@ export const Chat = ({
   // Update the handleInterviewConsent function
   const handleInterviewConsent = (consent: boolean) => {
     if (consent) {
-      // Start with first question immediately
-      const firstQuestion: Message = {
+      // Start first question immediately
+      const firstQuestion = interviewQuestions[0];
+      const questionMessage: Message = {
         id: Date.now().toString(),
         role: "assistant",
-        content: interviewQuestions[0].question,
+        content: firstQuestion.question,
         timestamp: Date.now(),
       };
-      setMessages((prev) => [...prev, firstQuestion]);
-      speak(firstQuestion.content);
+      setMessages([questionMessage]); // Reset messages to show only current question
+      speak(questionMessage.content);
+      setCurrentQuestionIndex(0);
     } else {
       const conclusionMessage: Message = {
         id: Date.now().toString(),
         role: "assistant",
-        content: `Thank you for your time. We appreciate your interest in Tesco.`,
+        content: `Thank you for your time. We appreciate your interest in Tesco. You can always come back later for the technical interview.`,
         timestamp: Date.now(),
       };
-      setMessages((prev) => [...prev, conclusionMessage]);
+      setMessages([conclusionMessage]);
       speak(conclusionMessage.content);
       setTimeout(() => handleEndInterview(), 5000);
     }
+  };
+
+  // Update the startPhase2Interview function
+  const startPhase2Interview = (analysis: DocumentAnalysis) => {
+    setIsInterviewPhase2(true);
+    resetChatAndStartPhase2(analysis);
   };
 
   // Update the resetChatAndStartPhase2 function
@@ -1583,6 +1607,7 @@ export const Chat = ({
     setLiveTranscript("");
     setInterimTranscript("");
     setCurrentQuestionIndex(0);
+    setInterviewConversations([]);
 
     // Extract questions from analysis
     const questions = [
@@ -1590,7 +1615,6 @@ export const Chat = ({
       ...analysis.data.recommendedQuestions.behavioral,
     ];
     setInterviewQuestions(questions);
-    setIsInterviewPhase2(true);
 
     // Add the analysis summary message
     const summaryMessage: Message = {
@@ -1601,28 +1625,25 @@ export const Chat = ({
       isAnalysis: true,
     };
 
-    // Add welcome message for phase 2
-    const welcomeMessage: Message = {
-      id: (Date.now() + 1).toString(),
+    // Add consent request message
+    const consentRequestMessage: Message = {
+      id: Date.now() + 1,
       role: "assistant",
-      content: `Based on your profile analysis, I have some specific questions that will help us better understand your experience. Would you like to proceed with a brief technical and behavioral interview?`,
+      content: `Based on your profile analysis, I would like to proceed with a technical and behavioral interview to better understand your experience. Would you like to continue?`,
       timestamp: Date.now(),
     };
 
-    // Add consent request message
     const consentMessage: Message = {
-      id: (Date.now() + 2).toString(),
+      id: Date.now() + 2,
       role: "assistant",
       content: "interview_consent",
       timestamp: Date.now(),
       isConsentRequest: true,
     };
 
-    // Set all messages at once
-    setMessages([summaryMessage, welcomeMessage, consentMessage]);
-
-    // Speak the welcome message
-    speak(welcomeMessage.content);
+    // Set messages in sequence
+    setMessages([summaryMessage, consentRequestMessage, consentMessage]);
+    speak(consentRequestMessage.content);
   };
 
   return (
