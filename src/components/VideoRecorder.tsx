@@ -36,7 +36,13 @@ export const VideoRecorder: React.FC<VideoRecorderProps> = ({
           <img
             src={tara}
             alt="TARA - AI Interviewer"
-            className="w-full aspect-video object-cover"
+            className="w-full aspect-video object-contain"
+            style={{
+              backgroundImage: `url(${tara})`,
+              backgroundSize: "100% 100%",
+              backgroundPosition: "center",
+              backgroundRepeat: "no-repeat",
+            }}
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
           <div className="absolute top-3 left-3 px-3 py-1.5 bg-black/30 backdrop-blur-md rounded-lg text-white text-xs font-medium flex items-center gap-1.5">
