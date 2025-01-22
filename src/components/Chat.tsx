@@ -637,6 +637,17 @@ export const Chat = ({
   // Add this near your other state declarations
   const [closeCountdown, setCloseCountdown] = useState(5);
 
+  // Add new state for Phase 2 flag
+  const [isInterviewPhase2, setIsInterviewPhase2] = useState(false);
+
+  // Add state for interview questions
+  const [interviewQuestions, setInterviewQuestions] = useState<
+    Array<{
+      question: string;
+      expectedAnswer: string;
+    }>
+  >([]);
+
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
@@ -645,14 +656,6 @@ export const Chat = ({
   const noSpeechTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isSpeakingRef = useRef<boolean>(false);
   const currentUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
-
-  // Add this new state variable
-  const [interviewQuestions, setInterviewQuestions] = useState<
-    Array<{
-      question: string;
-      expectedAnswer: string;
-    }>
-  >([]);
 
   // Update the useEffect for countdown and navigation
   useEffect(() => {
@@ -1116,7 +1119,7 @@ export const Chat = ({
         resumeLink: answers.resumeLink,
         coverLetterLink: answers.coverLetterLink,
         timestamp: Date.now(),
-        documentAnalysis: answers.documentAnalysis,
+        // documentAnalysis: answers.documentAnalysis,
       };
 
       // Make API call to save data
@@ -1153,8 +1156,50 @@ export const Chat = ({
     }
   };
 
-  // Update the handleAnswer function to not await document upload
+  // Update the handleAnswer function
   const handleAnswer = async (answer: string | FileList) => {
+    if (isInterviewPhase2) {
+      // Handle Phase 2 interview answers
+      const currentQuestion = interviewQuestions[currentQuestionIndex];
+
+      // Store user's answer
+      const userMessage: Message = {
+        id: Date.now().toString(),
+        role: "user",
+        content: answer as string,
+        timestamp: Date.now(),
+      };
+      setMessages((prev) => [...prev, userMessage]);
+
+      // Move to next question
+      const nextIndex = currentQuestionIndex + 1;
+      if (nextIndex < interviewQuestions.length) {
+        // Ask next question
+        const nextQuestion: Message = {
+          id: (Date.now() + 1).toString(),
+          role: "assistant",
+          content: interviewQuestions[nextIndex].question,
+          timestamp: Date.now(),
+        };
+        setMessages((prev) => [...prev, nextQuestion]);
+        speak(nextQuestion.content);
+        setCurrentQuestionIndex(nextIndex);
+      } else {
+        // Interview completed
+        const completionMessage: Message = {
+          id: Date.now().toString(),
+          role: "assistant",
+          content:
+            "Thank you for completing the interview. We'll review your responses and get back to you soon.",
+          timestamp: Date.now(),
+        };
+        setMessages((prev) => [...prev, completionMessage]);
+        speak(completionMessage.content);
+        setTimeout(() => handleEndInterview(), 5000);
+      }
+      return;
+    }
+
     if (!answer || isSpeakingRef.current || isLoading) return;
 
     setIsLoading(true);
@@ -1269,6 +1314,7 @@ export const Chat = ({
               setMessages((prev) => [...prev, uploadPrompt]);
               await speak(uploadPrompt.content);
               setShowChoices(true);
+              await saveApplicantData();
               return;
             } else {
               // If user selected "no", save applicant data before moving to final message
@@ -1502,62 +1548,29 @@ export const Chat = ({
     }
   };
 
-  // Add interview question handling
+  // Update the handleInterviewConsent function
   const handleInterviewConsent = (consent: boolean) => {
     if (consent) {
-      const analysis = answers.documentAnalysis?.resume;
-      if (analysis) {
-        const questions = [
-          ...analysis.data.recommendedQuestions.technical,
-          ...analysis.data.recommendedQuestions.behavioral,
-        ];
-        setInterviewQuestions(questions);
-
-        const startMessage: Message = {
-          id: Date.now().toString(),
-          role: "assistant",
-          content: "Great! Let's begin with the first question:",
-          timestamp: Date.now(),
-        };
-
-        setMessages((prev) => [...prev, startMessage]);
-        speak(startMessage.content);
-
-        setTimeout(() => askNextQuestion(), 1000);
-      }
+      // Start with first question immediately
+      const firstQuestion: Message = {
+        id: Date.now().toString(),
+        role: "assistant",
+        content: interviewQuestions[0].question,
+        timestamp: Date.now(),
+      };
+      setMessages((prev) => [...prev, firstQuestion]);
+      speak(firstQuestion.content);
     } else {
       const conclusionMessage: Message = {
         id: Date.now().toString(),
         role: "assistant",
-        content: `Thank you for your time, ${userName}. We appreciate your interest in Tesco.`,
+        content: `Thank you for your time. We appreciate your interest in Tesco.`,
         timestamp: Date.now(),
       };
       setMessages((prev) => [...prev, conclusionMessage]);
       speak(conclusionMessage.content);
-
       setTimeout(() => handleEndInterview(), 5000);
     }
-  };
-
-  // Add this function to ask questions sequentially
-  const askNextQuestion = () => {
-    if (currentQuestionIndex < interviewQuestions.length) {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: Date.now().toString(),
-          role: "assistant",
-          content: interviewQuestions[currentQuestionIndex].question,
-          timestamp: Date.now(),
-        },
-      ]);
-    }
-  };
-
-  // Add this function to handle Phase 2 interview start
-  const startPhase2Interview = (analysis: DocumentAnalysis) => {
-    // Clear all states and messages
-    resetChatAndStartPhase2(analysis);
   };
 
   // Update the resetChatAndStartPhase2 function
@@ -1570,8 +1583,14 @@ export const Chat = ({
     setLiveTranscript("");
     setInterimTranscript("");
     setCurrentQuestionIndex(0);
-    setIsLoading(false);
-    setIsListening(false);
+
+    // Extract questions from analysis
+    const questions = [
+      ...analysis.data.recommendedQuestions.technical,
+      ...analysis.data.recommendedQuestions.behavioral,
+    ];
+    setInterviewQuestions(questions);
+    setIsInterviewPhase2(true);
 
     // Add the analysis summary message
     const summaryMessage: Message = {
