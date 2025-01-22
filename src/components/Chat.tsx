@@ -1246,7 +1246,7 @@ export const Chat = ({
         const type = currentQuestion.id === "resume" ? "resume" : "coverletter";
 
         // Initiate upload without waiting
-        uploadDocument(file, type);
+        type === "resume" && uploadDocument(file, type);
 
         // Create message with upload initiation
         const userMessage: Message = {
