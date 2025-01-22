@@ -882,24 +882,32 @@ export const Chat = ({
   }, []);
 
   const startRecognition = () => {
-    if (
-      !isRecognitionActive.current &&
-      recognitionRef.current &&
-      !isSpeakingRef.current
-    ) {
-      recognitionRef.current.start();
-      isRecognitionActive.current = true;
-      setIsListening(true);
-      setMicState(MicState.LISTENING);
+    if (!recognitionRef.current) {
+      initializeSpeechRecognition();
+    }
+
+    if (recognitionRef.current && !isRecognitionActive.current) {
+      try {
+        recognitionRef.current.start();
+        isRecognitionActive.current = true;
+        setIsListening(true);
+        setLiveTranscript("");
+        setInterimTranscript("");
+      } catch (error) {
+        console.error("Error starting recognition:", error);
+      }
     }
   };
 
   const stopRecognition = () => {
-    if (isRecognitionActive.current && recognitionRef.current) {
-      recognitionRef.current.stop();
-      isRecognitionActive.current = false;
-      setIsListening(false);
-      setMicState(MicState.PROCESSING);
+    if (recognitionRef.current && isRecognitionActive.current) {
+      try {
+        recognitionRef.current.stop();
+        isRecognitionActive.current = false;
+        setIsListening(false);
+      } catch (error) {
+        console.error("Error stopping recognition:", error);
+      }
     }
   };
 
@@ -1164,9 +1172,15 @@ export const Chat = ({
     }
   };
 
-  // Update the handleAnswer function
+  // Update the handleAnswer function for Phase 2
   const handleAnswer = async (answer: string | FileList) => {
     if (isInterviewPhase2) {
+      if (!answer || isSpeakingRef.current || isLoading) return;
+
+      setIsLoading(true);
+      stopRecognition();
+      setMicState(MicState.READY); // Reset mic state after processing
+
       const currentQuestion = interviewQuestions[currentQuestionIndex];
 
       // Store conversation
@@ -1178,7 +1192,18 @@ export const Chat = ({
         },
       ]);
 
-      // Move to next question immediately
+      // Add user's answer to messages
+      const userMessage: Message = {
+        id: Date.now().toString(),
+        role: "user",
+        content: answer as string,
+        timestamp: Date.now(),
+      };
+      setMessages((prev) => [...prev, userMessage]);
+      setLiveTranscript("");
+      setInterimTranscript("");
+
+      // Move to next question
       const nextIndex = currentQuestionIndex + 1;
       if (nextIndex < interviewQuestions.length) {
         const nextQuestion = interviewQuestions[nextIndex];
@@ -1188,9 +1213,10 @@ export const Chat = ({
           content: nextQuestion.question,
           timestamp: Date.now(),
         };
-        // Show only the next question
-        setMessages([questionMessage]);
-        speak(nextQuestion.content);
+
+        // Add next question to messages
+        setMessages((prev) => [...prev, questionMessage]);
+        speak(questionMessage.content);
         setCurrentQuestionIndex(nextIndex);
       } else {
         // Interview completed
@@ -1201,14 +1227,12 @@ export const Chat = ({
             "Thank you for completing the interview. We'll review your responses and get back to you soon.",
           timestamp: Date.now(),
         };
-        setMessages([completionMessage]);
+        setMessages((prev) => [...prev, completionMessage]);
         speak(completionMessage.content);
-
-        // Log all conversations
-        console.log("Interview Conversations:", interviewConversations);
-
         setTimeout(() => handleEndInterview(), 5000);
       }
+
+      setIsLoading(false);
       return;
     }
 
@@ -1548,19 +1572,27 @@ export const Chat = ({
 
   // Update the handleMicClick function
   const handleMicClick = () => {
+    if (isLoading) return;
+
     switch (micState) {
       case MicState.READY:
         if (!isSpeakingRef.current) {
           startRecognition();
+          setMicState(MicState.LISTENING);
         }
         break;
       case MicState.LISTENING:
         stopRecognition();
+        setMicState(MicState.PROCESSING);
         if (liveTranscript) {
           handleAnswer(liveTranscript);
         }
         break;
-      // No action needed for SPEAKING and PROCESSING states
+      case MicState.PROCESSING:
+        // Do nothing while processing
+        break;
+      default:
+        break;
     }
   };
 
