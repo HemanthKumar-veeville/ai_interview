@@ -1066,9 +1066,12 @@ export const Chat = ({
                 role: "assistant",
                 content: JSON.stringify(response.data),
                 timestamp: Date.now(),
-                isAnalysis: true, // Add this flag to identify analysis messages
+                isAnalysis: true,
               },
             ]);
+
+            // Set analyzing to false after successful analysis
+            setIsAnalyzing(false);
 
             // After showing analysis, ask for interview consent
             setTimeout(() => {
@@ -1079,7 +1082,7 @@ export const Chat = ({
                   role: "assistant",
                   content: "interview_consent",
                   timestamp: Date.now(),
-                  isConsentRequest: true, // Add this flag for consent messages
+                  isConsentRequest: true,
                 },
               ]);
             }, 1000);
