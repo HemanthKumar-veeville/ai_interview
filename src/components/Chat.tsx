@@ -24,8 +24,8 @@ interface ChatProps {
 const INTERVIEW_QUESTIONS = [
   {
     id: "welcome",
-    content:
-      "🌟 Welcome to the Tesco Talent Gateway! 🌟\n\nHello! I'm TARA (Tesco's AI Recruitment Assistant). Let's get started with a few quick questions to ensure the best match for you. 💼\n\nFirst things first, tell me your first name in 1 word",
+    content: "🌟 Welcome",
+    //  to the Tesco Talent Gateway! 🌟\n\nHello! I'm TARA (Tesco's AI Recruitment Assistant). Let's get started with a few quick questions to ensure the best match for you. 💼\n\nFirst things first, tell me your first name in 1 word",
     type: "text",
     validation: (answer: string) => {
       const name = answer.trim();
@@ -36,8 +36,8 @@ const INTERVIEW_QUESTIONS = [
   },
   {
     id: "role",
-    content: (name: string) =>
-      `Wonderful to meet you, ${name}! 😊 Your journey with Tesco could be just around the corner!\n\nPlease choose the role that interests you the most?`,
+    content: (name: string) => `Wonderful`,
+    //  to meet you, ${name}! 😊 Your journey with Tesco could be just around the corner!\n\nPlease choose the role that interests you the most?`,
     type: "choice",
     options: [
       { id: "sde2", label: "Software Development Engineer (SDE2) 👨‍💻" },
@@ -56,8 +56,8 @@ const INTERVIEW_QUESTIONS = [
   },
   {
     id: "break",
-    content: (name: string) =>
-      `Thanks for sharing that, ${name}! 😊\n\nWe believe that career breaks can bring valuable perspectives. Have you had a career break in the past? Please select the duration: 🌱`,
+    content: (name: string) => `Thanks`,
+    //  for sharing that, ${name}! 😊\n\nWe believe that career breaks can bring valuable perspectives. Have you had a career break in the past? Please select the duration: 🌱`,
     type: "choice",
     options: [
       {
@@ -81,8 +81,8 @@ const INTERVIEW_QUESTIONS = [
   },
   {
     id: "experience",
-    content: (name: string) =>
-      `You're doing great, ${name}! 🌟\n\nI'd love to hear about your professional journey. Please select your years of experience: 💼`,
+    content: (name: string) => `You're`,
+    //  doing great, ${name}! 🌟\n\nI'd love to hear about your professional journey. Please select your years of experience: 💼`,
     type: "choice",
     options: [
       {
@@ -102,21 +102,6 @@ const INTERVIEW_QUESTIONS = [
               `Thank you for sharing your journey with us, ${name}! 🌟 While we're currently seeking candidates with over 5 years of experience, we'd love to keep in touch! Please send your resume to joinus@tesco.com, and we'll reach out when the perfect opportunity arises. Keep growing! 🚀`,
           }
         : { valid: true, value: "5+ years" };
-    },
-  },
-  {
-    id: "resume",
-    content: (name: string) =>
-      `Excellent, ${name}! You've got an impressive background! 🌟\n\nNow, let's take the next step together. Could you please share your latest Resume? 📄`,
-    type: "upload",
-    validation: (files: FileList) => {
-      return files.length > 0
-        ? { valid: true, value: Array.from(files) }
-        : {
-            valid: false,
-            message: (name: string) =>
-              `${name}, please provide your resume to proceed.`,
-          };
     },
   },
   {
@@ -146,6 +131,21 @@ const INTERVIEW_QUESTIONS = [
         valid: true,
         value: null,
       };
+    },
+  },
+  {
+    id: "resume",
+    content: (name: string) => `Excellent,`,
+    //  ${name}! You've got an impressive background! 🌟\n\nNow, let's take the next step together. Could you please share your latest Resume? 📄`,
+    type: "upload",
+    validation: (files: FileList) => {
+      return files.length > 0
+        ? { valid: true, value: Array.from(files) }
+        : {
+            valid: false,
+            message: (name: string) =>
+              `${name}, please provide your resume to proceed.`,
+          };
     },
   },
 ];
@@ -355,6 +355,7 @@ const DocumentAnalysisResults = ({
   analysis: DocumentAnalysis;
   onClose: () => void;
 }) => {
+  console.log({ analysis });
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -542,45 +543,216 @@ const MicButton = ({
   );
 };
 
-// Add this new component for displaying analysis summary in chat
+// Update the DocumentAnalysisSummary component
 const DocumentAnalysisSummary = ({
   analysis,
 }: {
-  analysis: DocumentAnalysis;
+  analysis: any; // Using any since the structure can vary
 }) => {
-  const parsedAnalysis = JSON.parse(analysis.data.analysis);
-  console.log({ parsedAnalysis });
+  console.log({ analysis });
+  if (!analysis) return null;
+
+  const formatDate = (dateString: string) => {
+    try {
+      return new Date(dateString).toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+    } catch (e) {
+      return dateString;
+    }
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-white/95 backdrop-blur-sm rounded-xl p-4 shadow-md border border-white/20"
+      className="space-y-6 bg-white/95 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20"
     >
-      {/* Summary Section */}
-      <div className="space-y-4">
-        <h3 className="text-lg font-semibold text-gray-800">
-          📋 Profile Summary
-        </h3>
-        <p className="text-gray-700 leading-relaxed">
-          {parsedAnalysis["Candidate Summary"]}
-        </p>
-      </div>
-      <div className="space-y-4">
-        <h3 className="text-lg font-semibold text-gray-800">
-          📋 Skills Summary
-        </h3>
-        <p className="text-gray-700 leading-relaxed">
-          {parsedAnalysis["Skills Assessment"]}
-        </p>
-      </div>
-      <div className="space-y-4">
-        <h3 className="text-lg font-semibold text-gray-800">
-          📋 Experience Summary
-        </h3>
-        <p className="text-gray-700 leading-relaxed">
-          {parsedAnalysis["Experience Validation"]}
-        </p>
-      </div>
+      {/* Candidate Summary Section */}
+      {analysis?.candidateSummary && (
+        <div className="space-y-4">
+          <h3 className="text-xl font-semibold text-gray-800 flex items-center gap-2">
+            <span className="p-2 bg-blue-100 rounded-lg">👤</span>
+            Profile Overview
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {Object.entries(analysis.candidateSummary).map(
+              ([key, value]) =>
+                value && (
+                  <div key={key} className="bg-gray-50 p-3 rounded-lg">
+                    <div className="text-sm text-gray-500 capitalize">
+                      {key.replace(/([A-Z])/g, " $1").trim()}
+                    </div>
+                    <div className="text-gray-700 font-medium mt-1">
+                      {String(value)}
+                    </div>
+                  </div>
+                )
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Skills Assessment Section */}
+      {analysis?.skillsAssessment && (
+        <div className="space-y-4">
+          <h3 className="text-xl font-semibold text-gray-800 flex items-center gap-2">
+            <span className="p-2 bg-green-100 rounded-lg">💡</span>
+            Skills & Expertise
+          </h3>
+          <div className="space-y-4">
+            {/* Technical Skills */}
+            {analysis.skillsAssessment.technicalSkills?.length > 0 && (
+              <div className="space-y-2">
+                <h4 className="text-md font-medium text-gray-700">
+                  Technical Skills
+                </h4>
+                <div className="flex flex-wrap gap-2">
+                  {analysis.skillsAssessment.technicalSkills.map(
+                    (skill: string) => (
+                      <span
+                        key={skill}
+                        className="px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-sm"
+                      >
+                        {skill}
+                      </span>
+                    )
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Certifications */}
+            {analysis.skillsAssessment.certifications?.length > 0 && (
+              <div className="space-y-2">
+                <h4 className="text-md font-medium text-gray-700">
+                  Certifications
+                </h4>
+                <ul className="list-disc list-inside space-y-1">
+                  {analysis.skillsAssessment.certifications.map(
+                    (cert: string) => (
+                      <li key={cert} className="text-gray-600">
+                        {cert}
+                      </li>
+                    )
+                  )}
+                </ul>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Experience Section */}
+      {analysis?.experienceValidation?.roles?.length > 0 && (
+        <div className="space-y-4">
+          <h3 className="text-xl font-semibold text-gray-800 flex items-center gap-2">
+            <span className="p-2 bg-purple-100 rounded-lg">💼</span>
+            Professional Experience
+          </h3>
+          <div className="space-y-6">
+            {analysis.experienceValidation.roles.map(
+              (role: any, index: number) => (
+                <div
+                  key={index}
+                  className="relative pl-4 border-l-2 border-gray-200"
+                >
+                  <div className="absolute -left-2 top-0 w-4 h-4 bg-white border-2 border-gray-300 rounded-full" />
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-start">
+                      <h4 className="text-lg font-medium text-gray-800">
+                        {role?.title}
+                      </h4>
+                      <span className="text-sm text-gray-500">
+                        {role?.duration}
+                      </span>
+                    </div>
+                    <div className="text-gray-600">{role?.company}</div>
+                    {role?.responsibilities?.length > 0 && (
+                      <ul className="list-disc list-inside space-y-1 text-gray-600 text-sm">
+                        {role.responsibilities.map(
+                          (resp: string, idx: number) => (
+                            <li key={idx}>{resp}</li>
+                          )
+                        )}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              )
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Red Flags Section - Only show if there are concerns */}
+      {analysis?.redFlags?.concerns?.length > 0 && (
+        <div className="space-y-4">
+          <h3 className="text-xl font-semibold text-gray-800 flex items-center gap-2">
+            <span className="p-2 bg-red-100 rounded-lg">⚠️</span>
+            Areas of Attention
+          </h3>
+          <div className="bg-red-50 p-4 rounded-lg">
+            <div className="text-red-700 font-medium">
+              Risk Level: {analysis.redFlags.riskLevel}
+            </div>
+            <ul className="list-disc list-inside space-y-1 mt-2">
+              {analysis.redFlags.concerns.map(
+                (concern: string, index: number) => (
+                  <li key={index} className="text-red-600">
+                    {concern}
+                  </li>
+                )
+              )}
+            </ul>
+          </div>
+        </div>
+      )}
+
+      {/* Match Analysis Section */}
+      {analysis?.matchAnalysis && (
+        <div className="space-y-4">
+          <h3 className="text-xl font-semibold text-gray-800 flex items-center gap-2">
+            <span className="p-2 bg-yellow-100 rounded-lg">🎯</span>
+            Role Match Analysis
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {analysis.matchAnalysis.roleCompatibility && (
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <div className="text-sm text-gray-500">Role Compatibility</div>
+                <div className="text-gray-700 font-medium mt-1">
+                  {analysis.matchAnalysis.roleCompatibility}
+                </div>
+              </div>
+            )}
+            {analysis.matchAnalysis.strengthAreas?.length > 0 && (
+              <div className="bg-green-50 p-4 rounded-lg">
+                <div className="text-sm text-green-700 font-medium">
+                  Strengths
+                </div>
+                <ul className="list-disc list-inside mt-1">
+                  {analysis.matchAnalysis.strengthAreas.map(
+                    (strength: string, index: number) => (
+                      <li key={index} className="text-green-600">
+                        {strength}
+                      </li>
+                    )
+                  )}
+                </ul>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Timestamp */}
+      {analysis?.timestamp && (
+        <div className="text-xs text-gray-400 text-right">
+          Analysis generated on: {formatDate(analysis.timestamp)}
+        </div>
+      )}
     </motion.div>
   );
 };
@@ -1044,6 +1216,7 @@ export const Chat = ({
       formData.append("file", file);
       formData.append("instanceId", instanceId);
       formData.append("documentType", type);
+      formData.append("role", answers.role);
 
       setIsAnalyzing(true);
 
@@ -1710,7 +1883,7 @@ export const Chat = ({
     const summaryMessage: Message = {
       id: Date.now().toString(),
       role: "assistant",
-      content: JSON.stringify(analysis),
+      content: analysis,
       timestamp: Date.now(),
       isAnalysis: true,
     };
@@ -1836,7 +2009,7 @@ export const Chat = ({
                     >
                       {message.isAnalysis ? (
                         <DocumentAnalysisSummary
-                          analysis={JSON.parse(message.content)}
+                          analysis={message?.content?.data?.analysis || {}}
                         />
                       ) : message.isConsentRequest ? (
                         <InterviewConsentMessage
