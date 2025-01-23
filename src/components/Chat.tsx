@@ -24,8 +24,8 @@ interface ChatProps {
 const INTERVIEW_QUESTIONS = [
   {
     id: "welcome",
-    content: "🌟 Welcome",
-    //  to the Tesco Talent Gateway! 🌟\n\nHello! I'm TARA (Tesco's AI Recruitment Assistant). Let's get started with a few quick questions to ensure the best match for you. 💼\n\nFirst things first, tell me your first name in 1 word",
+    content:
+      "🌟 Welcome, to the Tesco Talent Gateway! 🌟\n\nHello! I'm TARA (Tesco's AI Recruitment Assistant). Let's get started with a few quick questions to ensure the best match for you. 💼\n\nFirst things first, tell me your first name in 1 word",
     type: "text",
     validation: (answer: string) => {
       const name = answer.trim();
@@ -36,8 +36,8 @@ const INTERVIEW_QUESTIONS = [
   },
   {
     id: "role",
-    content: (name: string) => `Wonderful`,
-    //  to meet you, ${name}! 😊 Your journey with Tesco could be just around the corner!\n\nPlease choose the role that interests you the most?`,
+    content: (name: string) =>
+      `Wonderful to meet you, ${name}! 😊 Your journey with Tesco could be just around the corner!\n\nPlease choose the role that interests you the most?`,
     type: "choice",
     options: [
       { id: "sde2", label: "Software Development Engineer (SDE2) 👨‍💻" },
@@ -56,8 +56,8 @@ const INTERVIEW_QUESTIONS = [
   },
   {
     id: "break",
-    content: (name: string) => `Thanks`,
-    //  for sharing that, ${name}! 😊\n\nWe believe that career breaks can bring valuable perspectives. Have you had a career break in the past? Please select the duration: 🌱`,
+    content: (name: string) =>
+      `Thanks for sharing that, ${name}! 😊\n\nWe believe that career breaks can bring valuable perspectives. Have you had a career break in the past? Please select the duration: 🌱`,
     type: "choice",
     options: [
       {
@@ -81,8 +81,8 @@ const INTERVIEW_QUESTIONS = [
   },
   {
     id: "experience",
-    content: (name: string) => `You're`,
-    //  doing great, ${name}! 🌟\n\nI'd love to hear about your professional journey. Please select your years of experience: 💼`,
+    content: (name: string) =>
+      `You're, doing great, ${name}! 🌟\n\nI'd love to hear about your professional journey. Please select your years of experience: 💼`,
     type: "choice",
     options: [
       {
@@ -107,7 +107,7 @@ const INTERVIEW_QUESTIONS = [
   {
     id: "coverletter",
     content: (name: string) =>
-      `Thank you for sharing your resume, ${name}! 📄\n\nWould you like to include a Cover Letter with your application? ✉\nWhile optional, a personalized cover letter can help us better understand your motivation!`,
+      `Excellent, ${name}! You've got an impressive background! 🌟\n\nWould you like to include a Cover Letter with your application? ✉\nWhile optional, a personalized cover letter can help us better understand your motivation!`,
     type: "choice",
     options: [
       {
@@ -135,8 +135,8 @@ const INTERVIEW_QUESTIONS = [
   },
   {
     id: "resume",
-    content: (name: string) => `Excellent,`,
-    //  ${name}! You've got an impressive background! 🌟\n\nNow, let's take the next step together. Could you please share your latest Resume? 📄`,
+    content: (name: string) =>
+      `Thank you for sharing your cover letter, ${name}! 📄\n\nNow, let's take the next step together. Could you please share your latest Resume? 📄`,
     type: "upload",
     validation: (files: FileList) => {
       return files.length > 0
