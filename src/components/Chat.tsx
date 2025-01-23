@@ -17,6 +17,7 @@ interface ChatProps {
   onInterviewEnd: () => void;
   instanceId: string;
   isScreenShared: boolean;
+  setTaraState: (state: string) => void;
 }
 
 // Enhanced interview questions with proper validation and UI options
@@ -611,6 +612,7 @@ export const Chat = ({
   onInterviewEnd,
   instanceId,
   isScreenShared,
+  setTaraState,
 }: ChatProps) => {
   const { toast } = useToast();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -679,6 +681,7 @@ export const Chat = ({
   const noSpeechTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isSpeakingRef = useRef<boolean>(false);
   const currentUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  // console.log({ messages, answers });
 
   // Update the useEffect for countdown and navigation
   useEffect(() => {
@@ -806,6 +809,10 @@ export const Chat = ({
       }
     };
   }, []);
+
+  useEffect(() => {
+    setTaraState(micState);
+  }, [micState]);
 
   // Modify the existing useEffect for scroll behavior
   useEffect(() => {

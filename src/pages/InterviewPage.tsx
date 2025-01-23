@@ -24,6 +24,7 @@ const InterviewPage = ({
 }: InterviewPageProps) => {
   const [isScreenShared, setIsScreenShared] = useState(false);
   const [isEnding, setIsEnding] = useState(false);
+  const [taraState, setTaraState] = useState("ready");
 
   useEffect(() => {
     // Track screen sharing status
@@ -211,6 +212,7 @@ const InterviewPage = ({
                 screenStream={screenStream}
                 cameraStream={cameraStream}
                 interviewerStream={interviewerStream}
+                taraState={taraState}
               />
             </div>
           )}
@@ -224,6 +226,7 @@ const InterviewPage = ({
                 onInterviewEnd={handleEndInterview}
                 instanceId={fileId}
                 isScreenShared={isScreenShared}
+                setTaraState={setTaraState}
               />
             </div>
           </div>
