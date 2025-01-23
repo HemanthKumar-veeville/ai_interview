@@ -1737,7 +1737,7 @@ export const Chat = ({
   return (
     <div
       className={`flex flex-col ${
-        isInterviewEnded ? "min-h-[600px]" : "h-[85vh]"
+        isInterviewEnded ? "h-[65vh]" : "h-[85vh]"
       } bg-gray-50 dark:bg-gray-900 rounded-lg overflow-hidden`}
     >
       {isInterviewEnded ? (
