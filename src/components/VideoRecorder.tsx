@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from "react";
+import React, { useRef, useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { motion } from "framer-motion";
 import { nodding, talking, silent } from "@/assets/videos";
@@ -19,37 +19,53 @@ export const VideoRecorder: React.FC<VideoRecorderProps> = ({
   taraState,
 }) => {
   const cameraVideoRef = useRef<HTMLVideoElement>(null);
-  const interviewerVideoRef = useRef<HTMLVideoElement>(null);
+  const videoRefs = {
+    ready: useRef<HTMLVideoElement>(null),
+    speaking: useRef<HTMLVideoElement>(null),
+    processing: useRef<HTMLVideoElement>(null),
+    listening: useRef<HTMLVideoElement>(null),
+  };
 
+  // Preload all videos on component mount
   useEffect(() => {
-    if (interviewerVideoRef.current) {
-      let videoSource;
-      switch (taraState) {
-        case "ready":
-          videoSource = silent;
-          break;
-        case "speaking":
-          videoSource = talking;
-          break;
-        case "processing":
-          videoSource = silent;
-          break;
-        case "listening":
-          videoSource = nodding;
-          break;
-        default:
-          videoSource = silent;
+    const videoSources = {
+      ready: silent,
+      speaking: talking,
+      processing: silent,
+      listening: nodding,
+    };
+
+    // Initialize all videos
+    Object.entries(videoSources).forEach(([state, source]) => {
+      if (videoRefs[state as keyof typeof videoRefs]?.current) {
+        const videoElement =
+          videoRefs[state as keyof typeof videoRefs].current!;
+        videoElement.src = source;
+        videoElement.load();
+        videoElement
+          .play()
+          .catch((err) => console.error(`Failed to play ${state} video:`, err));
       }
-      interviewerVideoRef.current.src = videoSource;
-      const playVideo = async () => {
-        try {
-          await interviewerVideoRef.current?.play();
-        } catch (err) {
-          console.error("Failed to play interviewer video:", err);
+    });
+  }, []);
+
+  // Handle video switching based on taraState
+  useEffect(() => {
+    Object.entries(videoRefs).forEach(([state, ref]) => {
+      if (ref.current) {
+        if (state === taraState) {
+          ref.current.style.display = "block";
+          ref.current
+            .play()
+            .catch((err) =>
+              console.error(`Failed to play ${state} video:`, err)
+            );
+        } else {
+          ref.current.style.display = "none";
+          ref.current.pause();
         }
-      };
-      playVideo();
-    }
+      }
+    });
   }, [taraState]);
 
   useEffect(() => {
@@ -67,14 +83,19 @@ export const VideoRecorder: React.FC<VideoRecorderProps> = ({
         transition={{ duration: 0.5, delay: 0.2 }}
       >
         <Card className="relative overflow-hidden rounded-2xl border border-white/20 shadow-xl bg-gradient-to-br from-gray-900/95 to-gray-800/95">
-          <video
-            ref={interviewerVideoRef}
-            autoPlay
-            playsInline
-            className="w-full aspect-video object-cover"
-            muted={true}
-            loop={true}
-          />
+          {/* Replace single video with multiple preloaded videos */}
+          {Object.entries(videoRefs).map(([state, ref]) => (
+            <video
+              key={state}
+              ref={ref}
+              autoPlay
+              playsInline
+              className="w-full aspect-video object-cover"
+              muted={true}
+              loop={true}
+              style={{ display: state === taraState ? "block" : "none" }}
+            />
+          ))}
           <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
           <div className="absolute top-3 left-3 px-3 py-1.5 bg-black/30 backdrop-blur-md rounded-lg text-white text-xs font-medium flex items-center gap-1.5">
             <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />

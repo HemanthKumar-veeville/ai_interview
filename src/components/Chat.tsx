@@ -1083,10 +1083,7 @@ export const Chat = ({
             ]);
 
             setIsAnalyzing(false);
-
-            // Start next phase without explicitly mentioning it
             setTimeout(() => startPhase2Interview(response.data), 1000);
-
             return response.data.data.url;
           }
           throw new Error("Invalid response format from server");
@@ -1094,11 +1091,44 @@ export const Chat = ({
         .catch((error) => {
           console.error(`Error uploading ${type}:`, error);
           setIsAnalyzing(false);
-          toast({
-            title: "Upload Warning",
-            description: `There was an issue with ${type} upload. Don't worry, you can continue with the interview.`,
-            variant: "default",
-          });
+
+          // Instead of showing toast, add an error message and prompt for retry
+          const errorMessage: Message = {
+            id: Date.now().toString(),
+            role: "assistant",
+            content: `I apologize, but there seems to be an issue with the ${type} upload. Could you please try uploading it again?`,
+            timestamp: Date.now(),
+          };
+
+          setMessages((prev) => [...prev, errorMessage]);
+          speak(errorMessage.content);
+
+          // Reset the current question to show upload controls again
+          if (type === "resume") {
+            const resumeQuestion = INTERVIEW_QUESTIONS.find(
+              (q) => q.id === "resume"
+            );
+            if (resumeQuestion) {
+              const questionContent =
+                typeof resumeQuestion.content === "function"
+                  ? resumeQuestion.content(userName)
+                  : resumeQuestion.content;
+
+              setMessages((prev) => [
+                ...prev,
+                {
+                  id: Date.now().toString(),
+                  role: "assistant",
+                  content: questionContent,
+                  timestamp: Date.now(),
+                },
+              ]);
+            }
+          } else {
+            setIsCoverLetterUpload(true);
+          }
+          setShowChoices(true);
+          throw error;
         });
 
       // Set a temporary URL immediately to continue the flow
@@ -1111,11 +1141,43 @@ export const Chat = ({
     } catch (error) {
       setIsAnalyzing(false);
       console.error(`Error initiating ${type} upload:`, error);
-      toast({
-        title: "Upload Warning",
-        description: `There was an issue with ${type} upload. Don't worry, you can continue with the interview.`,
-        variant: "default",
-      });
+
+      // Add an error message and prompt for retry
+      const errorMessage: Message = {
+        id: Date.now().toString(),
+        role: "assistant",
+        content: `I apologize, but there seems to be an issue with the ${type} upload. Could you please try uploading it again?`,
+        timestamp: Date.now(),
+      };
+
+      setMessages((prev) => [...prev, errorMessage]);
+      speak(errorMessage.content);
+
+      // Reset the current question to show upload controls again
+      if (type === "resume") {
+        const resumeQuestion = INTERVIEW_QUESTIONS.find(
+          (q) => q.id === "resume"
+        );
+        if (resumeQuestion) {
+          const questionContent =
+            typeof resumeQuestion.content === "function"
+              ? resumeQuestion.content(userName)
+              : resumeQuestion.content;
+
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: Date.now().toString(),
+              role: "assistant",
+              content: questionContent,
+              timestamp: Date.now(),
+            },
+          ]);
+        }
+      } else {
+        setIsCoverLetterUpload(true);
+      }
+      setShowChoices(true);
       return "pending";
     }
   };
